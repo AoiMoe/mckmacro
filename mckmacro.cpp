@@ -102,7 +102,7 @@ class LoopDetector
 	DONT_COPY(LoopDetector);
 public:
 	typedef list<Record_> Stack;
-	typedef Stack::const_iterator StackIterator;
+	typedef typename Stack::const_iterator StackIterator;
 private:
 	typedef set<string> Set;
 	Set m_set;
@@ -630,19 +630,23 @@ class FileContext
 			const char) const;
 	bool define_macro_(const ConstStringRegion &input) const
 	{
-		return directive_(input, do_define_macro_, MACRO_DEF_CHAR);
+		return directive_(input, &FileContext::do_define_macro_,
+				  MACRO_DEF_CHAR);
 	}
 	bool undef_macro_(const ConstStringRegion &input) const
 	{
-		return directive_(input, do_undef_macro_, MACRO_UNDEF_CHAR);
+		return directive_(input, &FileContext::do_undef_macro_,
+				  MACRO_UNDEF_CHAR);
 	}
 	bool set_scope_(const ConstStringRegion &input) const
 	{
-		return directive_(input, do_set_scope_, SCOPE_CHAR);
+		return directive_(input, &FileContext::do_set_scope_,
+				  SCOPE_CHAR);
 	}
 	bool include_(const ConstStringRegion &input) const
 	{
-		return directive_(input, do_include_, INCLUDE_CHAR);
+		return directive_(input, &FileContext::do_include_,
+				  INCLUDE_CHAR);
 	}
 	string expand_(ConstStringRegion) const;
 	void process_();
