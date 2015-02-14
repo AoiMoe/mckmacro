@@ -18,4 +18,4 @@ $(PROG): $(OBJS)
 	$(CXX) $(LDFLAGS) -o $@ $<
 
 clean:
-	-rm $(OBJS) $(PROG)
+	-rm -f $(OBJS) $(PROG)
