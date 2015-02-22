@@ -229,8 +229,7 @@ public:
 	}
 };
 
-template <class Container_,
-	  class Iter_=typename Container_::const_iterator>
+template <class Container_, class Iter_=typename Container_::const_iterator>
 class Region
 {
 public:
