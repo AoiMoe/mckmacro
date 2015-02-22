@@ -890,10 +890,10 @@ FileContext::expand_(ConstStringRegion input) const
 		}
 		if (macro_char) {
 			macro_char = false;
-			if (*input == MACRO_CHAR) {
-				ConstStringRegion tmp = input;
+			if (*input == MACRO_CHAR || *input == COMM_CHAR) {
+				auto tmp = input;
 				out += string(ConstStringRegion(begin, --tmp));
-				out += '\\';
+				out += *input;
 				enter_out = true;
 				begin = ++input;
 				continue;
@@ -927,6 +927,8 @@ FileContext::expand_(ConstStringRegion input) const
 		}
 		if (*input == MACRO_CHAR)
 			macro_char = true;
+		if (*input == COMM_CHAR)
+			break;
 next:
 		++input;
 	}
