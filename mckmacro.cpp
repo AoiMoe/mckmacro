@@ -30,11 +30,21 @@
 #include <map>
 #include <set>
 #include <list>
+#include <utility>
 #include <cstdlib>
 #include <cctype>
 #include <exception>
 
 using namespace std;
+
+template <typename T_>
+typename std::enable_if<std::is_pointer<T_>::value, T_>::type
+reset_pointer(T_ *pp, T_ &&v = nullptr)
+{
+	T_ tmp = std::move(*pp);
+	*pp = std::forward<T_>(v);
+	return tmp;
+}
 
 class Exit
 {
@@ -103,9 +113,9 @@ class LoopDetector
 	struct LoopedTag { };
 public:
 	using Looped = NameError<LoopedTag>;
-	using Stack = list<Record_>;
+	using Stack = std::list<Record_>;
 private:
-	using Set = set<string>;
+	using Set = std::set<string>;
 	Set m_set;
 	Stack m_stack;
 	bool m_freeze;
@@ -327,8 +337,16 @@ class MacroProcessor
 	MacroProcessor(MacroProcessor &&) = delete;
 	MacroProcessor &operator = (const MacroProcessor &) = delete;
 	MacroProcessor &operator = (MacroProcessor &&) = delete;
+	//
+	using Record = MacroStorage::Record;
+	using LoopDet = LoopDetector<string>;
+public:
+	using Stack = LoopDet::Stack;
+	using Looped = LoopDet::Looped;
+	using Undefined = MacroStorage::Undefined;
+private:
 	MacroStorage m_storage;
-	LoopDetector<string> m_loop_detector;
+	LoopDet m_loop_detector;
 	bool m_auto_scope;
 	string m_current_scope;
 	string make_scoped_(const string &name) const
@@ -351,58 +369,33 @@ class MacroProcessor
 		return name;
 	}
 public:
-	using Stack = LoopDetector<string>::Stack;
-	using Looped = LoopDetector<string>::Looped;
-	using Undefined = MacroStorage::Undefined;
-	using Record = MacroStorage::Record;
 	//
 	MacroProcessor() noexcept : m_auto_scope(false) { }
 	~MacroProcessor() = default;
-	class Locker;
-	friend class Locker;
+private:
 	class Locker
 	{
+		friend class MacroProcessor;
 		Locker(const Locker &) = delete;
-		Locker(Locker &&) = delete;
 		Locker &operator = (const Locker &) = delete;
 		Locker &operator = (Locker &&) = delete;
 	private:
-		MacroProcessor &m_mp;
-		const MacroStorage::Record *m_result;
-	public:
-		Locker(MacroProcessor &mp, const string &name)
-			: m_mp(mp),
-			  m_result(NULL)
+		LoopDet &m_loop_detector;
+		const Record *m_result;
+		Locker(LoopDet &l, const Record &r)
+			: m_loop_detector(l), m_result(&r)
 		{
-			try {
-				string n1, n2;
-				try {
-					n1 = m_mp.make_scoped_(name);
-					m_result = &m_mp.m_storage.query(n1);
-					m_mp.m_loop_detector.push(n1, n1);
-				}
-				catch (Undefined &) {
-					try {
-						n2 = m_mp.make_global_(name);
-						m_result =
-						    &m_mp.m_storage.query(n2);
-						m_mp.m_loop_detector.push(n2,
-									  n2);
-					}
-					catch (Undefined &) {
-						throw Undefined(name);
-					}
-				}
-			}
-			catch (Looped &ex) {
-				throw;
-			}
+		}
+	public:
+		Locker(Locker &&rh)
+			: m_loop_detector(rh.m_loop_detector),
+			  m_result(reset_pointer(&rh.m_result))
+		{
 		}
 		~Locker()
 		{
-			// if the constructor throws some exception,
-			// the destructor never be called.
-			m_mp.m_loop_detector.pop();
+			if (m_result)
+				m_loop_detector.pop();
 		}
 		const string &query() const
 		{
@@ -411,6 +404,34 @@ public:
 			return m_result->get_contents();
 		}
 	};
+	const Record &query_and_lock_1_(const string &name)
+	{
+		const auto &r = m_storage.query(name);
+		m_loop_detector.push(name, name);
+		return r;
+	}
+	const Record &query_and_lock_(const string &name)
+	{
+		try {
+			return query_and_lock_1_(make_scoped_(name));
+		}
+		catch (Undefined &) {
+			try {
+				return query_and_lock_1_(make_global_(name));
+			}
+			catch (Undefined &) {
+				throw Undefined(name);
+			}
+		}
+		catch (...) {
+			throw;
+		}
+	}
+public:
+	Locker lock(const string &name)
+	{
+		return Locker(m_loop_detector, query_and_lock_(name));
+	}
 	void set_scope(string s)
 	{
 		m_current_scope = std::move(s);
@@ -437,6 +458,7 @@ public:
 	void clear()
 	{
 		m_storage.clear();
+		m_loop_detector.clear();
 	}
 	const Stack &get_stack() const
 	{
@@ -551,24 +573,22 @@ public:
 	using CannotOpen = PathList::CannotOpen;
 	IncludeProcessor() = default;
 	~IncludeProcessor() = default;
-	class Locker;
-	friend class Locker;
+private:
 	class Locker
 	{
+		friend class IncludeProcessor;
 		Locker(const Locker &) = delete;
-		Locker(Locker &&) = delete;
 		Locker &operator = (const Locker &) = delete;
 		Locker &operator = (Locker &&) = delete;
 	private:
-		IncludeProcessor &m_ip;
-	public:
+		IncludeProcessor *m_ip;
 		Locker(IncludeProcessor &ip,
 		       string name,
 		       string base_file="",
-		       int base_line=0) : m_ip(ip)
+		       int base_line=0) : m_ip(&ip)
 		{
 			try {
-				m_ip.m_loop_detector.push(
+				m_ip->m_loop_detector.push(
 					name,
 					name,
 					std::move(base_file),
@@ -578,13 +598,22 @@ public:
 				throw;
 			}
 		}
+	public:
+		Locker(Locker &&rh) : m_ip(reset_pointer(&rh.m_ip)) { }
 		~Locker()
 		{
-			// if the constructor throws some exception,
-			// the destructor never be called.
-			m_ip.m_loop_detector.pop();
+			if (m_ip)
+				m_ip->m_loop_detector.pop();
 		}
 	};
+public:
+	Locker lock(string name, string base_file="", int base_line=0)
+	{
+		return Locker(*this,
+			      std::move(name),
+			      std::move(base_file),
+			      base_line);
+	}
 	void push(string path)
 	{
 		m_path_list.push(std::move(path));
@@ -826,8 +855,8 @@ FileContext::do_include_(ConstStringRegion input) const
 	auto file = get_string(input);
 	m_include_processor.open(ifs, file);
 
-	IncludeProcessor::Locker locker(m_include_processor, file,
-					m_input_file_name, m_line_number);
+	auto locker = m_include_processor.lock(
+		file, m_input_file_name, m_line_number);
 	FileContext::process(m_macro_processor, m_include_processor, m_logger,
 			     file, ifs, m_output_file_name, m_output_stream);
 }
@@ -902,8 +931,7 @@ FileContext::expand_(ConstStringRegion input) const
 			out += string(ConstStringRegion(begin, --tmp));
 			enter_out = true;
 			try {
-				MacroProcessor::Locker locker(
-					m_macro_processor,
+				auto locker = m_macro_processor.lock(
 					get_macro_name(&input));
 				out += this->expand_(locker.query());
 			}
@@ -979,9 +1007,9 @@ FileContext::process_()
 		this->put_message("error",
 				  string("macro ")+MACRO_CHAR+ex.get_name()+
 				  " is looped:");
-		for (const auto &i : m_macro_processor.get_stack()) {
-			auto &rec = m_macro_processor.query(i);
-			m_logger << "\t" << MACRO_CHAR << i
+		for (auto &mname : m_macro_processor.get_stack()) {
+			auto &rec = m_macro_processor.query(mname);
+			m_logger << "\t" << MACRO_CHAR << mname
 				 << " defined at line " << rec.get_line()
 				 << " in " << rec.get_file()
 				 << endl;
@@ -992,12 +1020,12 @@ FileContext::process_()
 		this->put_message("error",
 				  "including file \""+ex.get_name()+
 				  "\" is looped:");
-		for (const auto &i : m_include_processor.get_stack()) {
-			if (i.get_base_file().empty())
+		for (auto &rec : m_include_processor.get_stack()) {
+			if (rec.get_base_file().empty())
 				break;
-			m_logger << "\t\"" << i.get_file()
-				 << "\" include at line " << i.get_base_line()
-				 << " in \"" << i.get_base_file() << "\""
+			m_logger << "\t\"" << rec.get_file()
+				 << "\" include at line " << rec.get_base_line()
+				 << " in \"" << rec.get_base_file() << "\""
 				 << endl;
 		}
 		throw ExitFailure();
@@ -1111,7 +1139,7 @@ main(int argc, char **argv)
 	}
 	banner();
 	try {
-		IncludeProcessor::Locker locker(include_processor, ifile);
+		auto locker = include_processor.lock(ifile);
 		FileContext::process(macro_processor, include_processor, cerr,
 				     ifile, *is, ofile, *os);
 	} catch (Exit &ex) {
