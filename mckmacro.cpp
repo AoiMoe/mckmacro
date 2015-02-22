@@ -116,14 +116,15 @@ public:
 	{
 		return m_set.find(name) != m_set.end();
 	}
-	void push(string name, Record_ rec)
+	template <typename... Args>
+	void push(string name, Args&&... args)
 	{
 		if (this->is_loop(name)) {
 			this->freeze();
 			throw Looped(std::move(name));
 		}
 		m_set.emplace(std::move(name));
-		m_stack.emplace_front(std::move(rec));
+		m_stack.emplace_front(std::forward<Args>(args)...);
 	}
 	void pop() noexcept
 	{
@@ -460,7 +461,7 @@ public:
 	using CannotOpen = NameError<CannotOpenTag>;
 	PathList()
 	{
-		m_list.push_front(".");
+		m_list.emplace_front(".");
 	}
 	~PathList() = default;
 	void push(const string &path)
@@ -470,7 +471,7 @@ public:
 		auto tmp = path.end();
 		if (*--tmp != PATH_SEP)
 			tmp = path.end();
-		m_list.push_front(string(path.begin(), tmp));
+		m_list.emplace_front(path.begin(), tmp);
 	}
 	void open(ifstream &ifs, const string &name)
 	{
@@ -569,9 +570,9 @@ public:
 			try {
 				m_ip.m_loop_detector.push(
 					name,
-					Record(name,
-					       std::move(base_file),
-					       base_line));
+					name,
+					std::move(base_file),
+					base_line);
 			}
 			catch (Looped &ex) {
 				throw;
