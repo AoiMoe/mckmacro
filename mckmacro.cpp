@@ -37,6 +37,13 @@
 
 using namespace std;
 
+struct noncopyable
+{
+	noncopyable() = default;
+	noncopyable(const noncopyable &) = delete;
+	noncopyable &operator = (const noncopyable &) = delete;
+};
+
 template <typename T_>
 typename std::enable_if<std::is_pointer<T_>::value, T_>::type
 reset_pointer(T_ *pp, T_ &&v = nullptr)
@@ -104,11 +111,9 @@ constexpr auto SCOPE_AUTO_ON = '+';
 constexpr auto SCOPE_AUTO_OFF = '-';
 
 template <typename Record_>
-class LoopDetector
+class LoopDetector : noncopyable
 {
-	LoopDetector(const LoopDetector &) = delete;
 	LoopDetector(LoopDetector &&) = delete;
-	LoopDetector &operator = (const LoopDetector &) = delete;
 	LoopDetector &operator = (LoopDetector &&) = delete;
 	struct LoopedTag { };
 public:
@@ -256,6 +261,8 @@ private:
 	}
 public:
 	Region() = default;
+	Region(const Region &) = default;
+	Region &operator = (const Region &) = default;
 	Region(Container_ &container)
 		: m_curpos(container.begin()), m_end(container.end())
 	{
@@ -331,11 +338,9 @@ public:
 };
 using ConstStringRegion = Region<const string>;
 
-class MacroProcessor
+class MacroProcessor : noncopyable
 {
-	MacroProcessor(const MacroProcessor &) = delete;
 	MacroProcessor(MacroProcessor &&) = delete;
-	MacroProcessor &operator = (const MacroProcessor &) = delete;
 	MacroProcessor &operator = (MacroProcessor &&) = delete;
 	//
 	using Record = MacroStorage::Record;
@@ -373,11 +378,9 @@ public:
 	MacroProcessor() noexcept : m_auto_scope(false) { }
 	~MacroProcessor() = default;
 private:
-	class Locker
+	class Locker : noncopyable
 	{
 		friend class MacroProcessor;
-		Locker(const Locker &) = delete;
-		Locker &operator = (const Locker &) = delete;
 		Locker &operator = (Locker &&) = delete;
 	private:
 		LoopDet &m_loop_detector;
@@ -470,11 +473,9 @@ public:
 	}
 };
 
-class PathList
+class PathList : noncopyable
 {
-	PathList(const PathList &) = delete;
 	PathList(PathList &&) = delete;
-	PathList &operator = (const PathList &) = delete;
 	PathList &operator = (PathList &&) = delete;
 	using List = list<string>;
 	List m_list;
@@ -518,11 +519,9 @@ public:
 	}
 };
 
-class IncludeProcessor
+class IncludeProcessor : noncopyable
 {
-	IncludeProcessor(const IncludeProcessor &) = delete;
 	IncludeProcessor(IncludeProcessor &&) = delete;
-	IncludeProcessor &operator = (const IncludeProcessor &) = delete;
 	IncludeProcessor &operator = (IncludeProcessor &&) = delete;
 public:
 	class Record
@@ -574,11 +573,9 @@ public:
 	IncludeProcessor() = default;
 	~IncludeProcessor() = default;
 private:
-	class Locker
+	class Locker : noncopyable
 	{
 		friend class IncludeProcessor;
-		Locker(const Locker &) = delete;
-		Locker &operator = (const Locker &) = delete;
 		Locker &operator = (Locker &&) = delete;
 	private:
 		IncludeProcessor *m_ip;
@@ -628,11 +625,9 @@ public:
 	}
 };
 
-class FileContext
+class FileContext : noncopyable
 {
-	FileContext(const FileContext &) = delete;
 	FileContext(FileContext &&) = delete;
-	FileContext &operator = (const FileContext &) = delete;
 	FileContext &operator = (FileContext &&) = delete;
 	MacroProcessor &m_macro_processor;
 	IncludeProcessor &m_include_processor;
