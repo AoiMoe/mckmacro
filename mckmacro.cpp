@@ -778,8 +778,6 @@ get_scope_name(ConstStringRegion *pr)
 std::string
 get_string(ConstStringRegion input, bool *quoted = NULL)
 {
-	ConstStringRegion begin, end;
-	char quote_char = 0;
 
 	if (quoted)
 		*quoted = false;
@@ -788,7 +786,9 @@ get_string(ConstStringRegion input, bool *quoted = NULL)
 	if (input.is_end())
 		return input;
 
-	begin = end = input;
+	auto begin = input, end = input;
+	char quote_char = 0;
+
 	for (; !input.is_end(); ++input) {
 		if (*input == QUOTE_CHAR) {
 			if (begin == input) {
@@ -825,13 +825,11 @@ get_string(ConstStringRegion input, bool *quoted = NULL)
 void
 FileContext::do_define_macro_(ConstStringRegion input) const
 {
-	std::string name;
-	std::string additional = " "; // default: add one space character.
-	std::string str;
+	auto additional = std::string(" "); // default: add one space character
 	auto quoted = false;
 
-	name = get_macro_name(&input);
-	str = get_string(input, &quoted);
+	auto name = get_macro_name(&input);
+	auto str = get_string(input, &quoted);
 	if (str.empty() && !quoted) {
 //		m_macro_processor.undef(name);
 		m_macro_processor.define(name,
