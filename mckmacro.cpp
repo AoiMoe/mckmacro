@@ -739,7 +739,6 @@ get_macro_name(ConstStringRegion *pr, bool *rscoped = NULL)
 	auto scoped = false;
 	auto scoped_done = false;
 	auto body=false;
-	std::string ret;
 
 	for (; !r.is_end(); ++r) {
 		if (r == saved && *r == SCOPE_CHAR)
