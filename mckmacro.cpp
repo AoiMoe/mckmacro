@@ -51,11 +51,10 @@ public:									\
 
 template <typename T_>
 typename std::enable_if<std::is_pointer<T_>::value, T_>::type
-reset_pointer(T_ *pp, T_ &&v = nullptr)
+reset_pointer(T_ *pp, T_ v = nullptr) noexcept
 {
-	T_ tmp = std::move(*pp);
-	*pp = std::forward<T_>(v);
-	return tmp;
+	std::swap(*pp, v);
+	return v;
 }
 
 class Exit
