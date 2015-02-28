@@ -64,23 +64,23 @@ class Exit
 {
 	int m_code;
 public:
-	Exit(int code) noexcept : m_code(code) { }
 	~Exit() = default;
+	Exit(int code) noexcept : m_code(code) { }
 	int get_code() const noexcept { return m_code; }
 };
 
 class ExitSuccess : public Exit
 {
 public:
-	ExitSuccess() noexcept : Exit(EXIT_SUCCESS) { }
 	~ExitSuccess() = default;
+	ExitSuccess() noexcept : Exit(EXIT_SUCCESS) { }
 };
 
 class ExitFailure : public Exit
 {
 public:
-	ExitFailure() noexcept : Exit(EXIT_FAILURE) { }
 	~ExitFailure() = default;
+	ExitFailure() noexcept : Exit(EXIT_FAILURE) { }
 };
 
 template <typename Tag_>
@@ -88,8 +88,8 @@ class NameError
 {
 	string m_name;
 public:
-	NameError(string name) : m_name(std::move(name)) { }
 	~NameError() = default;
+	NameError(string name) : m_name(std::move(name)) { }
 	const string &get_name() const noexcept
 	{
 		return m_name;
@@ -127,14 +127,9 @@ private:
 public:
 	using Looped = NameError<LoopedTag>;
 	using Stack = std::list<Record_>;
-private:
-	using Set = std::set<string>;
-	Set m_set;
-	Stack m_stack;
-	bool m_freeze;
 public:
-	LoopDetector() noexcept : m_freeze(false) { }
 	~LoopDetector() = default;
+	LoopDetector() noexcept : m_freeze(false) { }
 	bool is_loop(const string &name) const noexcept
 	{
 		return m_set.find(name) != m_set.end();
@@ -178,6 +173,11 @@ public:
 		Stack().swap(m_stack);
 		m_freeze = false;
 	}
+private:
+	using Set = std::set<string>;
+	Set m_set;
+	Stack m_stack;
+	bool m_freeze;
 };
 
 class MacroStorage
@@ -197,6 +197,7 @@ public:
 		int m_line;
 		string m_contents;
 	public:
+		~Record() = default;
 		Record() noexcept : m_line(0) { }
 		Record(string file, int line, string contents)
 			: m_file(std::move(file)),
@@ -204,7 +205,6 @@ public:
 			  m_contents(std::move(contents))
 		{
 		}
-		~Record() = default;
 		const string &get_file() const noexcept
 		{
 			return m_file;
@@ -218,12 +218,9 @@ public:
 			return m_contents;
 		}
 	};
-private:
-	using Mapper = map<string, Record>;
-	Mapper m_mapper;
 public:
-	MacroStorage() = default;
 	~MacroStorage() = default;
+	MacroStorage() = default;
 	void undef(const string &name)
 	{
 		auto i = m_mapper.find(name);
@@ -248,6 +245,9 @@ public:
 			throw Undefined(name);
 		return i->second;
 	}
+private:
+	using Mapper = map<string, Record>;
+	Mapper m_mapper;
 };
 
 template <class Container_, class Iter_=typename Container_::const_iterator>
@@ -257,16 +257,8 @@ class Region
 	DEFAULT_MOVABLE(Region);
 public:
 	using ValueType = typename Iter_::value_type;
-private:
-	Iter_ m_curpos, m_end;
-	void ensure_not_end_(string funcname) const
-	{
-		if (m_curpos == m_end)
-			throw SimpleEx("Region::"+
-				       std::move(funcname)+
-				       ": internal error.");
-	}
 public:
+	~Region() = default;
 	Region() = default;
 	Region(Container_ &container)
 		: m_curpos(container.begin()), m_end(container.end())
@@ -290,7 +282,6 @@ public:
 	{
 		return m_curpos == r.curpos() && m_end == r.end();
 	}
-	~Region() = default;
 	bool is_end() const noexcept
 	{
 		return m_curpos == m_end;
@@ -340,6 +331,16 @@ public:
 	{
 		return m_end-m_curpos;
 	}
+private:
+	void ensure_not_end_(string funcname) const
+	{
+		if (m_curpos == m_end)
+			throw SimpleEx("Region::"+
+				       std::move(funcname)+
+				       ": internal error.");
+	}
+private:
+	Iter_ m_curpos, m_end;
 };
 using ConstStringRegion = Region<const string>;
 
@@ -355,55 +356,21 @@ public:
 	using Looped = LoopDet::Looped;
 	using Undefined = MacroStorage::Undefined;
 private:
-	MacroStorage m_storage;
-	LoopDet m_loop_detector;
-	bool m_auto_scope;
-	string m_current_scope;
-	string make_scoped_(const string &name) const
-	{
-		if (name[0] != SCOPE_CHAR)
-			return (string() +
-				SCOPE_CHAR +
-				m_current_scope +
-				SCOPE_CHAR +
-				name);
-		return name;
-	}
-	string make_global_(const string &name) const
-	{
-		if (name[0] != SCOPE_CHAR)
-			return (string() +
-				SCOPE_CHAR +
-				SCOPE_CHAR +
-				name);
-		return name;
-	}
-public:
-	MacroProcessor() noexcept : m_auto_scope(false) { }
-	~MacroProcessor() = default;
-private:
 	class Locker
 	{
 		NONCOPYABLE(Locker);
 		friend class MacroProcessor;
 		Locker &operator = (Locker &&) = delete;
-	private:
-		LoopDet &m_loop_detector;
-		const Record *m_result;
-		Locker(LoopDet &l, const Record &r) noexcept
-			: m_loop_detector(l), m_result(&r)
-		{
-		}
 	public:
-		Locker(Locker &&rh)
-			: m_loop_detector(rh.m_loop_detector),
-			  m_result(reset_pointer(&rh.m_result))
-		{
-		}
 		~Locker()
 		{
 			if (m_result)
 				m_loop_detector.pop();
+		}
+		Locker(Locker &&rh)
+			: m_loop_detector(rh.m_loop_detector),
+			  m_result(reset_pointer(&rh.m_result))
+		{
 		}
 		const string &query() const
 		{
@@ -411,31 +378,17 @@ private:
 				throw SimpleEx("internal error.");
 			return m_result->get_contents();
 		}
+	private:
+		Locker(LoopDet &l, const Record &r) noexcept
+			: m_loop_detector(l), m_result(&r)
+		{
+		}
+		LoopDet &m_loop_detector;
+		const Record *m_result;
 	};
-	const Record &query_and_lock_1_(const string &name)
-	{
-		const auto &r = m_storage.query(name);
-		m_loop_detector.push(name, name);
-		return r;
-	}
-	const Record &query_and_lock_(const string &name)
-	{
-		try {
-			return query_and_lock_1_(make_scoped_(name));
-		}
-		catch (Undefined &) {
-			try {
-				return query_and_lock_1_(make_global_(name));
-			}
-			catch (Undefined &) {
-				throw Undefined(name);
-			}
-		}
-		catch (...) {
-			throw;
-		}
-	}
 public:
+	~MacroProcessor() = default;
+	MacroProcessor() noexcept : m_auto_scope(false) { }
 	Locker lock(const string &name)
 	{
 		return Locker(m_loop_detector, query_and_lock_(name));
@@ -476,6 +429,54 @@ public:
 	{
 		return m_storage.query(make_scoped_(std::move(name)));
 	}
+private:
+	string make_scoped_(const string &name) const
+	{
+		if (name[0] != SCOPE_CHAR)
+			return (string() +
+				SCOPE_CHAR +
+				m_current_scope +
+				SCOPE_CHAR +
+				name);
+		return name;
+	}
+	string make_global_(const string &name) const
+	{
+		if (name[0] != SCOPE_CHAR)
+			return (string() +
+				SCOPE_CHAR +
+				SCOPE_CHAR +
+				name);
+		return name;
+	}
+	const Record &query_and_lock_1_(const string &name)
+	{
+		const auto &r = m_storage.query(name);
+		m_loop_detector.push(name, name);
+		return r;
+	}
+	const Record &query_and_lock_(const string &name)
+	{
+		try {
+			return query_and_lock_1_(make_scoped_(name));
+		}
+		catch (Undefined &) {
+			try {
+				return query_and_lock_1_(make_global_(name));
+			}
+			catch (Undefined &) {
+				throw Undefined(name);
+			}
+		}
+		catch (...) {
+			throw;
+		}
+	}
+private:
+	MacroStorage m_storage;
+	LoopDet m_loop_detector;
+	bool m_auto_scope;
+	string m_current_scope;
 };
 
 class PathList
@@ -484,7 +485,6 @@ class PathList
 	DEFAULT_MOVABLE(PathList);
 private:
 	using List = list<string>;
-	List m_list;
 	struct CannotOpenTag { };
 public:
 	using CannotOpen = NameError<CannotOpenTag>;
@@ -523,6 +523,8 @@ public:
 		}
 		throw CannotOpen(name);
 	}
+private:
+	List m_list;
 };
 
 class IncludeProcessor
@@ -532,14 +534,10 @@ class IncludeProcessor
 public:
 	class Record
 	{
-		string m_file;
-		string m_base_file;
-		int m_base_line;
+		DEFAULT_COPYABLE(Record);
+		DEFAULT_MOVABLE(Record);
 	public:
-		Record(const Record &) = default;
-		Record(Record &&) = default;
-		Record &operator = (const Record &) = default;
-		Record &operator = (Record &&) = default;
+		~Record() = default;
 		Record() : m_base_line(0) { }
 		Record(string file, string base_file, int base_line)
 			: m_file(std::move(file)),
@@ -547,7 +545,6 @@ public:
 			  m_base_line(base_line)
 		{
 		}
-		~Record() = default;
 		operator const string & () const noexcept
 		{
 			return m_file;
@@ -568,24 +565,29 @@ public:
 		{
 			return m_base_line;
 		}
+	private:
+		string m_file;
+		string m_base_file;
+		int m_base_line;
 	};
-private:
-	LoopDetector<Record> m_loop_detector;
-	PathList m_path_list;
 public:
 	using Stack = LoopDetector<Record>::Stack;
 	using Looped = LoopDetector<Record>::Looped;
 	using CannotOpen = PathList::CannotOpen;
-	IncludeProcessor() = default;
-	~IncludeProcessor() = default;
 private:
 	class Locker
 	{
 		NONCOPYABLE(Locker);
 		friend class IncludeProcessor;
 		Locker &operator = (Locker &&) = delete;
+	public:
+		~Locker()
+		{
+			if (m_ip)
+				m_ip->m_loop_detector.pop();
+		}
+		Locker(Locker &&rh) : m_ip(reset_pointer(&rh.m_ip)) { }
 	private:
-		IncludeProcessor *m_ip;
 		Locker(IncludeProcessor &ip,
 		       string name,
 		       string base_file="",
@@ -602,15 +604,11 @@ private:
 				throw;
 			}
 		}
-	public:
-		Locker(Locker &&rh) : m_ip(reset_pointer(&rh.m_ip)) { }
-		~Locker()
-		{
-			if (m_ip)
-				m_ip->m_loop_detector.pop();
-		}
+		IncludeProcessor *m_ip;
 	};
 public:
+	~IncludeProcessor() = default;
+	IncludeProcessor() = default;
 	Locker lock(string name, string base_file="", int base_line=0)
 	{
 		return Locker(*this,
@@ -630,22 +628,40 @@ public:
 	{
 		return m_loop_detector.get_stack();
 	}
+private:
+	LoopDetector<Record> m_loop_detector;
+	PathList m_path_list;
 };
 
 class FileContext
 {
 	NONCOPYABLE(FileContext);
 	NONMOVABLE(FileContext);
+public:
+	~FileContext() = default;
+	MacroProcessor &get_macro_processor() const noexcept
+	{
+		return m_macro_processor;
+	}
+	void put_message(string fac, string msg) const
+	{
+		m_logger << std::move(fac)
+			 << " at line " << m_line_number << " in "
+			 << m_input_file_name << ": "
+			 << std::move(msg) << std::endl;
+	}
+	static void process(MacroProcessor &macro_processor,
+			    IncludeProcessor &include_processor,
+			    ostream &logger,
+			    string input_name, istream &input_stream,
+			    string output_name, ostream &output_stream)
+	{
+		FileContext ctx(macro_processor, include_processor, logger,
+				std::move(input_name), input_stream,
+				std::move(output_name), output_stream);
+		ctx.process_();
+	}
 private:
-	MacroProcessor &m_macro_processor;
-	IncludeProcessor &m_include_processor;
-	ostream &m_logger;
-	string m_input_file_name;
-	istream &m_input_stream;
-	string m_output_file_name;
-	ostream &m_output_stream;
-	int m_line_number;
-//
 	FileContext(MacroProcessor &macro_processor,
 		    IncludeProcessor &include_processor,
 		    ostream &logger,
@@ -693,30 +709,15 @@ private:
 	}
 	string expand_(ConstStringRegion) const;
 	void process_();
-public:
-	~FileContext() = default;
-	MacroProcessor &get_macro_processor() const noexcept
-	{
-		return m_macro_processor;
-	}
-	void put_message(string fac, string msg) const
-	{
-		m_logger << std::move(fac)
-			 << " at line " << m_line_number << " in "
-			 << m_input_file_name << ": "
-			 << std::move(msg) << std::endl;
-	}
-	static void process(MacroProcessor &macro_processor,
-			    IncludeProcessor &include_processor,
-			    ostream &logger,
-			    string input_name, istream &input_stream,
-			    string output_name, ostream &output_stream)
-	{
-		FileContext ctx(macro_processor, include_processor, logger,
-				std::move(input_name), input_stream,
-				std::move(output_name), output_stream);
-		ctx.process_();
-	}
+private:
+	MacroProcessor &m_macro_processor;
+	IncludeProcessor &m_include_processor;
+	ostream &m_logger;
+	string m_input_file_name;
+	istream &m_input_stream;
+	string m_output_file_name;
+	ostream &m_output_stream;
+	int m_line_number;
 };
 
 void
