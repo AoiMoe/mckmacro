@@ -724,7 +724,7 @@ private:
 void
 skip_ws(ConstStringRegion *pr)
 {
-	ConstStringRegion &r=*pr;
+	auto &r = *pr;
 	for (; !r.is_end(); ++r)
 		if (!isspace(*r))
 			break;
