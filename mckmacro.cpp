@@ -35,8 +35,6 @@
 #include <cctype>
 #include <exception>
 
-using namespace std;
-
 #define COPYABLENESS_(name, designator)					\
 public:									\
 	name(const name &) = designator;				\
@@ -86,11 +84,11 @@ public:
 template <typename Tag_>
 class NameError
 {
-	string m_name;
+	std::string m_name;
 public:
 	~NameError() = default;
-	NameError(string name) : m_name(std::move(name)) { }
-	const string &get_name() const noexcept
+	NameError(std::string name) : m_name(std::move(name)) { }
+	const std::string &get_name() const noexcept
 	{
 		return m_name;
 	}
@@ -98,11 +96,11 @@ public:
 
 class SimpleEx
 {
-	string m_message;
+	std::string m_message;
 public:
-	SimpleEx(string str) : m_message(std::move(str)) { }
+	SimpleEx(std::string str) : m_message(std::move(str)) { }
 	~SimpleEx() = default;
-	const string &what() const noexcept { return m_message; }
+	const std::string &what() const noexcept { return m_message; }
 };
 
 constexpr auto DIRECTIVE_CHAR = '#';
@@ -130,12 +128,12 @@ public:
 public:
 	~LoopDetector() = default;
 	LoopDetector() noexcept : m_freeze(false) { }
-	bool is_loop(const string &name) const noexcept
+	bool is_loop(const std::string &name) const noexcept
 	{
 		return m_set.find(name) != m_set.end();
 	}
 	template <typename... Args>
-	void push(string name, Args&&... args)
+	void push(std::string name, Args&&... args)
 	{
 		if (this->is_loop(name)) {
 			this->freeze();
@@ -174,7 +172,7 @@ public:
 		m_freeze = false;
 	}
 private:
-	using Set = std::set<string>;
+	using Set = std::set<std::string>;
 	Set m_set;
 	Stack m_stack;
 	bool m_freeze;
@@ -192,20 +190,16 @@ public:
 	{
 		DEFAULT_COPYABLE(Record);
 		DEFAULT_MOVABLE(Record);
-	private:
-		string m_file;
-		int m_line;
-		string m_contents;
 	public:
 		~Record() = default;
 		Record() noexcept : m_line(0) { }
-		Record(string file, int line, string contents)
+		Record(std::string file, int line, std::string contents)
 			: m_file(std::move(file)),
 			  m_line(line),
 			  m_contents(std::move(contents))
 		{
 		}
-		const string &get_file() const noexcept
+		const std::string &get_file() const noexcept
 		{
 			return m_file;
 		}
@@ -213,21 +207,26 @@ public:
 		{
 			return m_line;
 		}
-		const string &get_contents() const noexcept
+		const std::string &get_contents() const noexcept
 		{
 			return m_contents;
 		}
+	private:
+		std::string m_file;
+		int m_line;
+		std::string m_contents;
 	};
 public:
 	~MacroStorage() = default;
 	MacroStorage() = default;
-	void undef(const string &name)
+	void undef(const std::string &name)
 	{
 		auto i = m_mapper.find(name);
 		if (i != m_mapper.end())
 			m_mapper.erase(i);
 	}
-	void define(string name, string file, int line, string contents)
+	void define(std::string name, std::string file, int line,
+		    std::string contents)
 	{
 		m_mapper.emplace(std::move(name),
 				 Record(std::move(file),
@@ -238,7 +237,7 @@ public:
 	{
 		Mapper().swap(m_mapper);
 	}
-	const Record &query(const string &name) const
+	const Record &query(const std::string &name) const
 	{
 		auto i = m_mapper.find(name);
 		if (i == m_mapper.end())
@@ -246,7 +245,7 @@ public:
 		return i->second;
 	}
 private:
-	using Mapper = map<string, Record>;
+	using Mapper = std::map<std::string, Record>;
 	Mapper m_mapper;
 };
 
@@ -332,7 +331,7 @@ public:
 		return m_end-m_curpos;
 	}
 private:
-	void ensure_not_end_(string funcname) const
+	void ensure_not_end_(std::string funcname) const
 	{
 		if (m_curpos == m_end)
 			throw SimpleEx("Region::"+
@@ -342,7 +341,7 @@ private:
 private:
 	Iter_ m_curpos, m_end;
 };
-using ConstStringRegion = Region<const string>;
+using ConstStringRegion = Region<const std::string>;
 
 class MacroProcessor
 {
@@ -350,7 +349,7 @@ class MacroProcessor
 	DEFAULT_MOVABLE(MacroProcessor);
 private:
 	using Record = MacroStorage::Record;
-	using LoopDet = LoopDetector<string>;
+	using LoopDet = LoopDetector<std::string>;
 public:
 	using Stack = LoopDet::Stack;
 	using Looped = LoopDet::Looped;
@@ -372,7 +371,7 @@ private:
 			  m_result(reset_pointer(&rh.m_result))
 		{
 		}
-		const string &query() const
+		const std::string &query() const
 		{
 			if (!m_result)
 				throw SimpleEx("internal error.");
@@ -389,11 +388,11 @@ private:
 public:
 	~MacroProcessor() = default;
 	MacroProcessor() noexcept : m_auto_scope(false) { }
-	Locker lock(const string &name)
+	Locker lock(const std::string &name)
 	{
 		return Locker(m_loop_detector, query_and_lock_(name));
 	}
-	void set_scope(string s)
+	void set_scope(std::string s)
 	{
 		m_current_scope = std::move(s);
 	}
@@ -405,11 +404,12 @@ public:
 	{
 		return m_auto_scope;
 	}
-	void undef(string name)
+	void undef(std::string name)
 	{
 		m_storage.undef(make_scoped_(std::move(name)));
 	}
-	void define(string name, string file, int line, string contents)
+	void define(std::string name, std::string file, int line,
+		    std::string contents)
 	{
 		m_storage.define(make_scoped_(std::move(name)),
 				 std::move(file),
@@ -425,37 +425,37 @@ public:
 	{
 		return m_loop_detector.get_stack();
 	}
-	const Record &query(string name) const
+	const Record &query(std::string name) const
 	{
 		return m_storage.query(make_scoped_(std::move(name)));
 	}
 private:
-	string make_scoped_(const string &name) const
+	std::string make_scoped_(const std::string &name) const
 	{
 		if (name[0] != SCOPE_CHAR)
-			return (string() +
+			return (std::string() +
 				SCOPE_CHAR +
 				m_current_scope +
 				SCOPE_CHAR +
 				name);
 		return name;
 	}
-	string make_global_(const string &name) const
+	std::string make_global_(const std::string &name) const
 	{
 		if (name[0] != SCOPE_CHAR)
-			return (string() +
+			return (std::string() +
 				SCOPE_CHAR +
 				SCOPE_CHAR +
 				name);
 		return name;
 	}
-	const Record &query_and_lock_1_(const string &name)
+	const Record &query_and_lock_1_(const std::string &name)
 	{
 		const auto &r = m_storage.query(name);
 		m_loop_detector.push(name, name);
 		return r;
 	}
-	const Record &query_and_lock_(const string &name)
+	const Record &query_and_lock_(const std::string &name)
 	{
 		try {
 			return query_and_lock_1_(make_scoped_(name));
@@ -476,7 +476,7 @@ private:
 	MacroStorage m_storage;
 	LoopDet m_loop_detector;
 	bool m_auto_scope;
-	string m_current_scope;
+	std::string m_current_scope;
 };
 
 class PathList
@@ -484,7 +484,7 @@ class PathList
 	NONCOPYABLE(PathList);
 	DEFAULT_MOVABLE(PathList);
 private:
-	using List = list<string>;
+	using List = std::list<std::string>;
 	struct CannotOpenTag { };
 public:
 	using CannotOpen = NameError<CannotOpenTag>;
@@ -493,7 +493,7 @@ public:
 		m_list.emplace_front(".");
 	}
 	~PathList() = default;
-	void push(const string &path)
+	void push(const std::string &path)
 	{
 		if (path.empty())
 			return;
@@ -502,7 +502,7 @@ public:
 			tmp = path.end();
 		m_list.emplace_front(path.begin(), tmp);
 	}
-	void open(ifstream &ifs, const string &name)
+	void open(std::ifstream &ifs, const std::string &name)
 	{
 		if (name.empty())
 			throw CannotOpen("");
@@ -539,25 +539,25 @@ public:
 	public:
 		~Record() = default;
 		Record() : m_base_line(0) { }
-		Record(string file, string base_file, int base_line)
+		Record(std::string file, std::string base_file, int base_line)
 			: m_file(std::move(file)),
 			  m_base_file(std::move(base_file)),
 			  m_base_line(base_line)
 		{
 		}
-		operator const string & () const noexcept
+		operator const std::string & () const noexcept
 		{
 			return m_file;
 		}
-		const string &get_name() const noexcept
+		const std::string &get_name() const noexcept
 		{
 			return m_file;
 		}
-		const string &get_file() const noexcept
+		const std::string &get_file() const noexcept
 		{
 			return m_file;
 		}
-		const string &get_base_file() const noexcept
+		const std::string &get_base_file() const noexcept
 		{
 			return m_base_file;
 		}
@@ -566,8 +566,8 @@ public:
 			return m_base_line;
 		}
 	private:
-		string m_file;
-		string m_base_file;
+		std::string m_file;
+		std::string m_base_file;
 		int m_base_line;
 	};
 public:
@@ -589,8 +589,8 @@ private:
 		Locker(Locker &&rh) : m_ip(reset_pointer(&rh.m_ip)) { }
 	private:
 		Locker(IncludeProcessor &ip,
-		       string name,
-		       string base_file="",
+		       std::string name,
+		       std::string base_file="",
 		       int base_line=0) : m_ip(&ip)
 		{
 			try {
@@ -609,18 +609,18 @@ private:
 public:
 	~IncludeProcessor() = default;
 	IncludeProcessor() = default;
-	Locker lock(string name, string base_file="", int base_line=0)
+	Locker lock(std::string name, std::string base_file="", int base_line=0)
 	{
 		return Locker(*this,
 			      std::move(name),
 			      std::move(base_file),
 			      base_line);
 	}
-	void push(string path)
+	void push(std::string path)
 	{
 		m_path_list.push(std::move(path));
 	}
-	void open(ifstream &ifs, string name)
+	void open(std::ifstream &ifs, std::string name)
 	{
 		m_path_list.open(ifs, std::move(name));
 	}
@@ -643,7 +643,7 @@ public:
 	{
 		return m_macro_processor;
 	}
-	void put_message(string fac, string msg) const
+	void put_message(std::string fac, std::string msg) const
 	{
 		m_logger << std::move(fac)
 			 << " at line " << m_line_number << " in "
@@ -652,9 +652,11 @@ public:
 	}
 	static void process(MacroProcessor &macro_processor,
 			    IncludeProcessor &include_processor,
-			    ostream &logger,
-			    string input_name, istream &input_stream,
-			    string output_name, ostream &output_stream)
+			    std::ostream &logger,
+			    std::string input_name,
+			    std::istream &input_stream,
+			    std::string output_name,
+			    std::ostream &output_stream)
 	{
 		FileContext ctx(macro_processor, include_processor, logger,
 				std::move(input_name), input_stream,
@@ -664,11 +666,11 @@ public:
 private:
 	FileContext(MacroProcessor &macro_processor,
 		    IncludeProcessor &include_processor,
-		    ostream &logger,
-		    string input_file_name,
-		    istream &input_stream,
-		    string output_file_name,
-		    ostream &output_stream)
+		    std::ostream &logger,
+		    std::string input_file_name,
+		    std::istream &input_stream,
+		    std::string output_file_name,
+		    std::ostream &output_stream)
 		: m_macro_processor(macro_processor),
 		  m_include_processor(include_processor),
 		  m_logger(logger),
@@ -707,16 +709,16 @@ private:
 		return directive_(input, &FileContext::do_include_,
 				  INCLUDE_CHAR);
 	}
-	string expand_(ConstStringRegion) const;
+	std::string expand_(ConstStringRegion) const;
 	void process_();
 private:
 	MacroProcessor &m_macro_processor;
 	IncludeProcessor &m_include_processor;
-	ostream &m_logger;
-	string m_input_file_name;
-	istream &m_input_stream;
-	string m_output_file_name;
-	ostream &m_output_stream;
+	std::ostream &m_logger;
+	std::string m_input_file_name;
+	std::istream &m_input_stream;
+	std::string m_output_file_name;
+	std::ostream &m_output_stream;
 	int m_line_number;
 };
 
@@ -729,7 +731,7 @@ skip_ws(ConstStringRegion *pr)
 			break;
 }
 
-string
+std::string
 get_macro_name(ConstStringRegion *pr, bool *rscoped = NULL)
 {
 	auto &r = *pr;
@@ -737,7 +739,7 @@ get_macro_name(ConstStringRegion *pr, bool *rscoped = NULL)
 	auto scoped = false;
 	auto scoped_done = false;
 	auto body=false;
-	string ret;
+	std::string ret;
 
 	for (; !r.is_end(); ++r) {
 		if (r == saved && *r == SCOPE_CHAR)
@@ -761,7 +763,7 @@ get_macro_name(ConstStringRegion *pr, bool *rscoped = NULL)
 	return ConstStringRegion(saved, r);
 }
 
-string
+std::string
 get_scope_name(ConstStringRegion *pr)
 {
 	auto &r = *pr;
@@ -775,7 +777,7 @@ get_scope_name(ConstStringRegion *pr)
 	return ConstStringRegion(saved, r);
 }
 
-string
+std::string
 get_string(ConstStringRegion input, bool *quoted = NULL)
 {
 	ConstStringRegion begin, end;
@@ -819,15 +821,15 @@ get_string(ConstStringRegion input, bool *quoted = NULL)
 	if (quote_char)
 		throw SimpleEx("unclosed quotation.");
 
-	return string(ConstStringRegion(begin, ++end));
+	return std::string(ConstStringRegion(begin, ++end));
 }
 
 void
 FileContext::do_define_macro_(ConstStringRegion input) const
 {
-	string name;
-	string additional = " "; // default: add one space character.
-	string str;
+	std::string name;
+	std::string additional = " "; // default: add one space character.
+	std::string str;
 	auto quoted = false;
 
 	name = get_macro_name(&input);
@@ -854,7 +856,7 @@ FileContext::do_undef_macro_(ConstStringRegion input) const
 void
 FileContext::do_include_(ConstStringRegion input) const
 {
-	ifstream ifs;
+	std::ifstream ifs;
 
 	auto file = get_string(input);
 	m_include_processor.open(ifs, file);
@@ -902,13 +904,13 @@ FileContext::directive_(ConstStringRegion input,
 	return false;
 }
 
-string
+std::string
 FileContext::expand_(ConstStringRegion input) const
 {
 	auto dbcs = false;
 	auto macro_char = false;
 	auto enter_out = false;
-	string out;
+	std::string out;
 
 	auto begin = input;
 	auto saved = input;
@@ -925,14 +927,15 @@ FileContext::expand_(ConstStringRegion input) const
 			macro_char = false;
 			if (*input == MACRO_CHAR || *input == COMM_CHAR) {
 				auto tmp = input;
-				out += string(ConstStringRegion(begin, --tmp));
+				out += std::string(ConstStringRegion(begin,
+								     --tmp));
 				out += *input;
 				enter_out = true;
 				begin = ++input;
 				continue;
 			}
 			auto tmp = input;
-			out += string(ConstStringRegion(begin, --tmp));
+			out += std::string(ConstStringRegion(begin, --tmp));
 			enter_out = true;
 			try {
 				auto locker = m_macro_processor.lock(
@@ -941,13 +944,13 @@ FileContext::expand_(ConstStringRegion input) const
 			}
 			catch (MacroProcessor::Undefined &ex) {
 #if 1
-				throw SimpleEx(string("macro \"")+
+				throw SimpleEx(std::string("macro \"")+
 					       MACRO_CHAR+ex.get_name()+
 					       "\" is not defined.");
 #else
 				this->put_message(
 					"warning",
-					string("macro \"")+
+					std::string("macro \"")+
 					MACRO_CHAR+ex.get_name()+
 					"\" is not defined.");
 #endif
@@ -965,7 +968,7 @@ next:
 		++input;
 	}
 	if (enter_out) {
-		out += string(begin);
+		out += std::string(begin);
 		return out;
 	}
 	return saved;
@@ -976,16 +979,16 @@ FileContext::process_()
 {
 	try {
 		while (m_input_stream.good()) {
-			string input;
+			std::string input;
 
 			getline(m_input_stream, input);
 			m_line_number++;
 			if (this->define_macro_(input))
-				m_output_stream << endl;
+				m_output_stream << std::endl;
 			else if (this->undef_macro_(input))
-				m_output_stream << endl;
+				m_output_stream << std::endl;
 			else if (this->set_scope_(input))
-				m_output_stream << endl;
+				m_output_stream << std::endl;
 			else if (this->include_(input))
 				;
 			else {
@@ -993,10 +996,10 @@ FileContext::process_()
 				    input.size() > 0 &&
 				    isalpha((int)(unsigned char)input[0])) {
 					m_macro_processor.set_scope(
-						string(1, input[0]));
+						std::string(1, input[0]));
 				}
 				m_output_stream << this->expand_(input)
-						<< endl;
+						<< std::endl;
 			}
 			if (m_output_stream.bad())
 				throw SimpleEx("cannot write to file \"" +
@@ -1009,14 +1012,16 @@ FileContext::process_()
 	}
 	catch (MacroProcessor::Looped &ex) {
 		this->put_message("error",
-				  string("macro ")+MACRO_CHAR+ex.get_name()+
+				  std::string("macro ") +
+				  MACRO_CHAR +
+				  ex.get_name() +
 				  " is looped:");
 		for (auto &mname : m_macro_processor.get_stack()) {
 			auto &rec = m_macro_processor.query(mname);
 			m_logger << "\t" << MACRO_CHAR << mname
 				 << " defined at line " << rec.get_line()
 				 << " in " << rec.get_file()
-				 << endl;
+				 << std::endl;
 		}
 		throw ExitFailure();
 	}
@@ -1030,7 +1035,7 @@ FileContext::process_()
 			m_logger << "\t\"" << rec.get_file()
 				 << "\" include at line " << rec.get_base_line()
 				 << " in \"" << rec.get_base_file() << "\""
-				 << endl;
+				 << std::endl;
 		}
 		throw ExitFailure();
 	}
@@ -1048,7 +1053,8 @@ void
 banner()
 {
 	if (f_banner)
-		cerr << "macro for mck (c)2006-2015 T.SHIOZAKI." << endl;
+		std::cerr << "macro for mck (c)2006-2015 T.SHIOZAKI."
+			  << std::endl;
 	f_banner = false;
 }
 
@@ -1056,7 +1062,8 @@ void
 usage()
 {
 	banner();
-	cerr << "usage: mckmacro [-q] [-o outfile] [infile]" << endl;
+	std::cerr << "usage: mckmacro [-q] [-o outfile] [infile]"
+		  << std::endl;
 	exit(EXIT_FAILURE);
 }
 
@@ -1064,7 +1071,7 @@ void
 warnx(const char *fmt)
 {
 	banner();
-	cerr << fmt << endl;
+	std::cerr << fmt << std::endl;
 }
 
 void
@@ -1079,12 +1086,12 @@ main(int argc, char **argv)
 {
 	MacroProcessor macro_processor;
 	IncludeProcessor include_processor;
-	ifstream ifs;
-	ofstream ofs;
-	istream *is = &cin;
-	ostream *os = &cout;
-	string ifile;
-	string ofile;
+	std::ifstream ifs;
+	std::ofstream ofs;
+	std::istream *is = &std::cin;
+	std::ostream *os = &std::cout;
+	std::string ifile;
+	std::string ofile;
 	auto done = false;
 
 	argv++;
@@ -1108,8 +1115,8 @@ main(int argc, char **argv)
 			ofile = argv[0];
 			break;
 		default:
-			warnx((string("error: unknown option -")+
-			       string(1, argv[0][1])+".").c_str());
+			warnx((std::string("error: unknown option -")+
+			       std::string(1, argv[0][1])+".").c_str());
 			usage();
 		}
 		argv++;
@@ -1125,7 +1132,7 @@ main(int argc, char **argv)
 		ifs.open(ifile.c_str());
 		if (ifs.fail())
 			errx(EXIT_FAILURE,
-			     (string("error: cannot open file \"")+
+			     (std::string("error: cannot open file \"")+
 			      ifile+"\".").c_str());
 		is = &ifs;
 	} else {
@@ -1135,7 +1142,7 @@ main(int argc, char **argv)
 		ofs.open(ofile.c_str());
 		if (ofs.fail())
 			errx(EXIT_FAILURE,
-			     (string("error: cannot open file \"")+
+			     (std::string("error: cannot open file \"")+
 			      ofile+"\".").c_str());
 		os = &ofs;
 	} else {
@@ -1144,8 +1151,11 @@ main(int argc, char **argv)
 	banner();
 	try {
 		auto locker = include_processor.lock(ifile);
-		FileContext::process(macro_processor, include_processor, cerr,
-				     ifile, *is, ofile, *os);
+		FileContext::process(macro_processor,
+				     include_processor,
+				     std::cerr,
+				     ifile, *is,
+				     ofile, *os);
 	} catch (Exit &ex) {
 		return ex.get_code();
 	}
