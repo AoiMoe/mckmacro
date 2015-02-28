@@ -37,12 +37,19 @@
 
 using namespace std;
 
-struct noncopyable
-{
-	noncopyable() = default;
-	noncopyable(const noncopyable &) = delete;
-	noncopyable &operator = (const noncopyable &) = delete;
-};
+#define COPYABLENESS_(name, designator)					\
+public:									\
+	name(const name &) = designator;				\
+	name &operator = (const name &) = designator
+#define MOVABLENESS_(name, designator)					\
+public:									\
+	name(name &&) = designator;					\
+	name &operator = (name &&) = designator
+
+#define NONCOPYABLE(name)		COPYABLENESS_(name, delete)
+#define DEFAULT_COPYABLE(name)		COPYABLENESS_(name, default)
+#define NONMOVABLE(name)		MOVABLENESS_(name, delete)
+#define DEFAULT_MOVABLE(name)		MOVABLENESS_(name, default)
 
 template <typename T_>
 typename std::enable_if<std::is_pointer<T_>::value, T_>::type
@@ -111,10 +118,11 @@ constexpr auto SCOPE_AUTO_ON = '+';
 constexpr auto SCOPE_AUTO_OFF = '-';
 
 template <typename Record_>
-class LoopDetector : noncopyable
+class LoopDetector
 {
-	LoopDetector(LoopDetector &&) = delete;
-	LoopDetector &operator = (LoopDetector &&) = delete;
+	NONCOPYABLE(LoopDetector);
+	DEFAULT_MOVABLE(LoopDetector);
+private:
 	struct LoopedTag { };
 public:
 	using Looped = NameError<LoopedTag>;
@@ -174,24 +182,21 @@ public:
 
 class MacroStorage
 {
-	MacroStorage(const MacroStorage &) = delete;
-	MacroStorage(MacroStorage &&) = delete;
-	MacroStorage &operator = (const MacroStorage &) = delete;
-	MacroStorage &operator = (MacroStorage &&) = delete;
+	NONCOPYABLE(MacroStorage);
+	DEFAULT_MOVABLE(MacroStorage);
+private:
 	struct UndefinedTag { };
 public:
 	using Undefined = NameError<UndefinedTag>;
 	class Record
 	{
+		DEFAULT_COPYABLE(Record);
+		DEFAULT_MOVABLE(Record);
+	private:
 		string m_file;
 		int m_line;
 		string m_contents;
 	public:
-		Record(const Record &) = default;
-		Record(Record &&) = default;
-		Record &operator = (const Record &) = default;
-		Record &operator = (Record &&) = default;
-
 		Record() noexcept : m_line(0) { }
 		Record(string file, int line, string contents)
 			: m_file(std::move(file)),
@@ -248,6 +253,8 @@ public:
 template <class Container_, class Iter_=typename Container_::const_iterator>
 class Region
 {
+	DEFAULT_COPYABLE(Region);
+	DEFAULT_MOVABLE(Region);
 public:
 	using ValueType = typename Iter_::value_type;
 private:
@@ -261,8 +268,6 @@ private:
 	}
 public:
 	Region() = default;
-	Region(const Region &) = default;
-	Region &operator = (const Region &) = default;
 	Region(Container_ &container)
 		: m_curpos(container.begin()), m_end(container.end())
 	{
@@ -338,11 +343,11 @@ public:
 };
 using ConstStringRegion = Region<const string>;
 
-class MacroProcessor : noncopyable
+class MacroProcessor
 {
-	MacroProcessor(MacroProcessor &&) = delete;
-	MacroProcessor &operator = (MacroProcessor &&) = delete;
-	//
+	NONCOPYABLE(MacroProcessor);
+	DEFAULT_MOVABLE(MacroProcessor);
+private:
 	using Record = MacroStorage::Record;
 	using LoopDet = LoopDetector<string>;
 public:
@@ -374,18 +379,18 @@ private:
 		return name;
 	}
 public:
-	//
 	MacroProcessor() noexcept : m_auto_scope(false) { }
 	~MacroProcessor() = default;
 private:
-	class Locker : noncopyable
+	class Locker
 	{
+		NONCOPYABLE(Locker);
 		friend class MacroProcessor;
 		Locker &operator = (Locker &&) = delete;
 	private:
 		LoopDet &m_loop_detector;
 		const Record *m_result;
-		Locker(LoopDet &l, const Record &r)
+		Locker(LoopDet &l, const Record &r) noexcept
 			: m_loop_detector(l), m_result(&r)
 		{
 		}
@@ -473,10 +478,11 @@ public:
 	}
 };
 
-class PathList : noncopyable
+class PathList
 {
-	PathList(PathList &&) = delete;
-	PathList &operator = (PathList &&) = delete;
+	NONCOPYABLE(PathList);
+	DEFAULT_MOVABLE(PathList);
+private:
 	using List = list<string>;
 	List m_list;
 	struct CannotOpenTag { };
@@ -519,10 +525,10 @@ public:
 	}
 };
 
-class IncludeProcessor : noncopyable
+class IncludeProcessor
 {
-	IncludeProcessor(IncludeProcessor &&) = delete;
-	IncludeProcessor &operator = (IncludeProcessor &&) = delete;
+	NONCOPYABLE(IncludeProcessor);
+	DEFAULT_MOVABLE(IncludeProcessor);
 public:
 	class Record
 	{
@@ -573,8 +579,9 @@ public:
 	IncludeProcessor() = default;
 	~IncludeProcessor() = default;
 private:
-	class Locker : noncopyable
+	class Locker
 	{
+		NONCOPYABLE(Locker);
 		friend class IncludeProcessor;
 		Locker &operator = (Locker &&) = delete;
 	private:
@@ -625,10 +632,11 @@ public:
 	}
 };
 
-class FileContext : noncopyable
+class FileContext
 {
-	FileContext(FileContext &&) = delete;
-	FileContext &operator = (FileContext &&) = delete;
+	NONCOPYABLE(FileContext);
+	NONMOVABLE(FileContext);
+private:
 	MacroProcessor &m_macro_processor;
 	IncludeProcessor &m_include_processor;
 	ostream &m_logger;
@@ -655,7 +663,6 @@ class FileContext : noncopyable
 		  m_line_number(0)
 	{
 	}
-	~FileContext() = default;
 	void do_define_macro_(ConstStringRegion) const;
 	void do_undef_macro_(ConstStringRegion) const;
 	void do_include_(ConstStringRegion) const;
@@ -687,6 +694,7 @@ class FileContext : noncopyable
 	string expand_(ConstStringRegion) const;
 	void process_();
 public:
+	~FileContext() = default;
 	MacroProcessor &get_macro_processor() const noexcept
 	{
 		return m_macro_processor;
