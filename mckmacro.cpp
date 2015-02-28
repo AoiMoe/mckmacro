@@ -86,7 +86,7 @@ class NameError
 	std::string m_name;
 public:
 	~NameError() = default;
-	NameError(std::string name) : m_name(std::move(name)) { }
+	NameError(std::string name) noexcept : m_name(std::move(name)) { }
 	const std::string &get_name() const noexcept
 	{
 		return m_name;
@@ -97,7 +97,7 @@ class SimpleEx
 {
 	std::string m_message;
 public:
-	SimpleEx(std::string str) : m_message(std::move(str)) { }
+	SimpleEx(std::string str) noexcept : m_message(std::move(str)) { }
 	~SimpleEx() = default;
 	const std::string &what() const noexcept { return m_message; }
 };
@@ -145,8 +145,12 @@ public:
 	{
 		if (m_freeze || m_stack.empty())
 			return;
-		m_set.erase(*m_stack.begin());
-		m_stack.pop_front();
+		try {
+			m_set.erase(*m_stack.begin());
+			m_stack.pop_front();
+		}
+		catch (...) {
+		}
 	}
 	const Record_ &get_top() const noexcept
 	{
@@ -164,10 +168,10 @@ public:
 	{
 		return m_stack;
 	}
-	void clear()
+	void clear() noexcept
 	{
-		Set().swap(m_set);
-		Stack().swap(m_stack);
+		m_set.clear();
+		m_stack.clear();
 		m_freeze = false;
 	}
 private:
@@ -232,9 +236,9 @@ public:
 					std::move(line),
 					std::move(contents)));
 	}
-	void clear()
+	void clear() noexcept
 	{
-		Mapper().swap(m_mapper);
+		m_mapper.clear();
 	}
 	const Record &query(const std::string &name) const
 	{
@@ -258,25 +262,25 @@ public:
 public:
 	~Region() = default;
 	Region() = default;
-	Region(Container_ &container)
+	Region(Container_ &container) noexcept
 		: m_curpos(container.begin()), m_end(container.end())
 	{
 	}
-	Region(Iter_ begin, Iter_ end)
+	Region(Iter_ begin, Iter_ end) noexcept
 		: m_curpos(begin), m_curpos(end)
 	{
 	}
-	Region(const Region &r1, const Region &r2)
+	Region(const Region &r1, const Region &r2) noexcept
 		: m_curpos(r1.curpos()), m_end(r2.curpos())
 	{
 	}
-	Region &operator = (Container_ &container)
+	Region &operator = (Container_ &container) noexcept
 	{
 		m_curpos = container.begin();
 		m_end = container.end();
 		return *this;
 	}
-	bool operator == (const Region &r) const
+	bool operator == (const Region &r) const noexcept
 	{
 		return m_curpos == r.curpos() && m_end == r.end();
 	}
@@ -317,15 +321,15 @@ public:
 	{
 		return Container_(m_curpos, m_end);
 	}
-	Iter_ curpos() const
+	Iter_ curpos() const noexcept
 	{
 		return m_curpos;
 	}
-	Iter_ end() const
+	Iter_ end() const noexcept
 	{
 		return m_end;
 	}
-	int length() const
+	int length() const noexcept
 	{
 		return m_end-m_curpos;
 	}
@@ -360,12 +364,12 @@ private:
 		friend class MacroProcessor;
 		Locker &operator = (Locker &&) = delete;
 	public:
-		~Locker()
+		~Locker() noexcept
 		{
 			if (m_result)
 				m_loop_detector.pop();
 		}
-		Locker(Locker &&rh)
+		Locker(Locker &&rh) noexcept
 			: m_loop_detector(rh.m_loop_detector),
 			  m_result(reset_pointer(&rh.m_result))
 		{
@@ -391,15 +395,15 @@ public:
 	{
 		return Locker(m_loop_detector, query_and_lock_(name));
 	}
-	void set_scope(std::string s)
+	void set_scope(std::string s) noexcept
 	{
 		m_current_scope = std::move(s);
 	}
-	void set_auto_scope_mode(bool mode)
+	void set_auto_scope_mode(bool mode) noexcept
 	{
 		m_auto_scope = mode;
 	}
-	bool is_auto_scope() const
+	bool is_auto_scope() const noexcept
 	{
 		return m_auto_scope;
 	}
@@ -415,12 +419,12 @@ public:
 				 line,
 				 std::move(contents));
 	}
-	void clear()
+	void clear() noexcept
 	{
 		m_storage.clear();
 		m_loop_detector.clear();
 	}
-	const Stack &get_stack() const
+	const Stack &get_stack() const noexcept
 	{
 		return m_loop_detector.get_stack();
 	}
@@ -580,12 +584,12 @@ private:
 		friend class IncludeProcessor;
 		Locker &operator = (Locker &&) = delete;
 	public:
-		~Locker()
+		~Locker() noexcept
 		{
 			if (m_ip)
 				m_ip->m_loop_detector.pop();
 		}
-		Locker(Locker &&rh) : m_ip(reset_pointer(&rh.m_ip)) { }
+		Locker(Locker &&rh) noexcept : m_ip(reset_pointer(&rh.m_ip)) { }
 	private:
 		Locker(IncludeProcessor &ip,
 		       std::string name,
@@ -623,7 +627,7 @@ public:
 	{
 		m_path_list.open(ifs, std::move(name));
 	}
-	const Stack &get_stack() const
+	const Stack &get_stack() const noexcept
 	{
 		return m_loop_detector.get_stack();
 	}
