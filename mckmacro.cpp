@@ -34,6 +34,7 @@
 #include <cstdlib>
 #include <cctype>
 #include <exception>
+#include <type_traits>
 
 #define COPYABLENESS_(name, designator)					\
 public:									\
@@ -1081,17 +1082,79 @@ errx(int excode, const char *fmt)
 	exit(excode);
 }
 
+template <class BaseStream> struct StreamTraits;
+
+template <>
+struct StreamTraits<std::istream>
+{
+	static constexpr const char *stdio_name = "<stdin>";
+	static constexpr std::istream &stdio_stream = std::cin;
+	using FileStream = std::ifstream;
+};
+
+template <>
+struct StreamTraits<std::ostream>
+{
+	static constexpr const char *stdio_name = "<stdout>";
+	static constexpr std::ostream &stdio_stream = std::cout;
+	using FileStream = std::ofstream;
+};
+
+
+template <class BaseStream>
+class FileArg
+{
+	NONCOPYABLE(FileArg);
+private:
+	using StreamTraits = struct StreamTraits<BaseStream>;
+	using FileStream = typename StreamTraits::FileStream;
+public:
+	FileArg() = default;
+	bool is_set() const noexcept { return m_is_file; }
+	void set_file_name(std::string fname) noexcept
+	{
+		m_is_file = true;
+		m_file_name = std::move(fname);
+	}
+	const std::string &get_file_name() const noexcept
+	{
+		return m_file_name;
+	}
+	void open()
+	{
+		if (m_is_file) {
+			m_file_stream.open(m_file_name);
+			if (m_file_stream.fail())
+				errx(EXIT_FAILURE,
+				     (std::string("error: cannot open file \"")+
+				      m_file_name+"\".").c_str());
+			m_result_stream = &m_file_stream;
+		} else {
+			m_file_name = StreamTraits::stdio_name;
+			m_result_stream = &StreamTraits::stdio_stream;
+		}
+	}
+	BaseStream &get_stream() const
+	{
+		if (!m_result_stream)
+			errx(EXIT_FAILURE,
+			     "error: internal error in FileArg:get().");
+		return *m_result_stream;
+	}
+private:
+	bool m_is_file = false;
+	std::string m_file_name;
+	FileStream m_file_stream;
+	BaseStream *m_result_stream = nullptr;
+};
+
 int
 main(int argc, char **argv)
 {
 	MacroProcessor macro_processor;
 	IncludeProcessor include_processor;
-	std::ifstream ifs;
-	std::ofstream ofs;
-	std::istream *is = &std::cin;
-	std::ostream *os = &std::cout;
-	std::string ifile;
-	std::string ofile;
+	FileArg<std::istream> input;
+	FileArg<std::ostream> output;
 	auto done = false;
 
 	argv++;
@@ -1107,12 +1170,12 @@ main(int argc, char **argv)
 		case 'o':
 			if (argc < 2)
 				usage();
-			if (ofile.size() > 0)
+			if (output.is_set())
 				errx(EXIT_FAILURE,
 				     "error: duplicate -o option.");
 			argv++;
 			argc--;
-			ofile = argv[0];
+			output.set_file_name(argv[0]);
 			break;
 		default:
 			warnx((std::string("error: unknown option -")+
@@ -1126,36 +1189,23 @@ main(int argc, char **argv)
 		warnx("error: too many input files.");
 		usage();
 	} else if (argc == 1)
-		ifile = argv[0];
+		input.set_file_name(argv[0]);
 
-	if (ifile.size() > 0) {
-		ifs.open(ifile.c_str());
-		if (ifs.fail())
-			errx(EXIT_FAILURE,
-			     (std::string("error: cannot open file \"")+
-			      ifile+"\".").c_str());
-		is = &ifs;
-	} else {
-		ifile = "<stdin>";
-	}
-	if (ofile.size() > 0) {
-		ofs.open(ofile.c_str());
-		if (ofs.fail())
-			errx(EXIT_FAILURE,
-			     (std::string("error: cannot open file \"")+
-			      ofile+"\".").c_str());
-		os = &ofs;
-	} else {
-		ofile = "<stdout>";
-	}
 	banner();
+
 	try {
-		auto locker = include_processor.lock(ifile);
+		input.open();
+		output.open();
+
+		auto locker = include_processor.lock(input.get_file_name());
+
 		FileContext::process(macro_processor,
 				     include_processor,
 				     std::cerr,
-				     ifile, *is,
-				     ofile, *os);
+				     input.get_file_name(),
+				     input.get_stream(),
+				     output.get_file_name(),
+				     output.get_stream());
 	} catch (Exit &ex) {
 		return ex.get_code();
 	}
