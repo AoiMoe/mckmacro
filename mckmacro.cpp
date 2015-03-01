@@ -654,18 +654,22 @@ public:
 			 << m_input_file_name << ": "
 			 << std::move(msg) << std::endl;
 	}
-	static void process(MacroProcessor &macro_processor,
-			    IncludeProcessor &include_processor,
-			    std::ostream &logger,
+	static void process(std::ostream &logger,
 			    std::string input_name,
 			    std::istream &input_stream,
 			    std::string output_name,
 			    std::ostream &output_stream)
 	{
-		FileContext ctx(macro_processor, include_processor, logger,
-				std::move(input_name), input_stream,
-				std::move(output_name), output_stream);
-		ctx.process_();
+		MacroProcessor macro_processor;
+		IncludeProcessor include_processor;
+
+		FileContext(macro_processor,
+			    include_processor,
+			    logger,
+			    std::move(input_name),
+			    input_stream,
+			    std::move(output_name),
+			    output_stream).process_();
 	}
 private:
 	FileContext(MacroProcessor &macro_processor,
@@ -862,10 +866,13 @@ FileContext::do_include_(ConstStringRegion input) const
 	auto file = get_string(input);
 	m_include_processor.open(ifs, file);
 
-	auto locker = m_include_processor.lock(
-		file, m_input_file_name, m_line_number);
-	FileContext::process(m_macro_processor, m_include_processor, m_logger,
-			     file, ifs, m_output_file_name, m_output_stream);
+	FileContext(m_macro_processor,
+		    m_include_processor,
+		    m_logger,
+		    file,
+		    ifs,
+		    m_output_file_name,
+		    m_output_stream).process_();
 }
 
 void
@@ -979,6 +986,8 @@ void
 FileContext::process_()
 {
 	try {
+		m_include_processor.lock(m_input_file_name);
+
 		while (m_input_stream.good()) {
 			std::string input;
 
@@ -1151,8 +1160,6 @@ private:
 int
 main(int argc, char **argv)
 {
-	MacroProcessor macro_processor;
-	IncludeProcessor include_processor;
 	FileArg<std::istream> input;
 	FileArg<std::ostream> output;
 	auto done = false;
@@ -1197,11 +1204,7 @@ main(int argc, char **argv)
 		input.open();
 		output.open();
 
-		auto locker = include_processor.lock(input.get_file_name());
-
-		FileContext::process(macro_processor,
-				     include_processor,
-				     std::cerr,
+		FileContext::process(std::cerr,
 				     input.get_file_name(),
 				     input.get_stream(),
 				     output.get_file_name(),
