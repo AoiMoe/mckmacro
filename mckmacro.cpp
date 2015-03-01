@@ -1131,7 +1131,7 @@ public:
 	}
 	void open()
 	{
-		if (m_is_file) {
+		if (m_is_file && m_file_name != "-") {
 			m_file_stream.open(m_file_name);
 			if (m_file_stream.fail())
 				errx(EXIT_FAILURE,
