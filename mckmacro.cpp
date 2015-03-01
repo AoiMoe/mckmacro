@@ -1078,7 +1078,7 @@ void
 errx(int excode, const char *fmt)
 {
 	warnx(fmt);
-	exit(EXIT_FAILURE);
+	exit(excode);
 }
 
 int
