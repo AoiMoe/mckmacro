@@ -37,11 +37,9 @@
 #include <type_traits>
 
 #define COPYABLENESS_(name, designator)					\
-public:									\
 	name(const name &) = designator;				\
 	name &operator = (const name &) = designator
 #define MOVABLENESS_(name, designator)					\
-public:									\
 	name(name &&) = designator;					\
 	name &operator = (name &&) = designator
 
@@ -118,6 +116,7 @@ constexpr auto SCOPE_AUTO_OFF = '-';
 template <typename Record_>
 class LoopDetector
 {
+public:
 	NONCOPYABLE(LoopDetector);
 	DEFAULT_MOVABLE(LoopDetector);
 private:
@@ -184,6 +183,7 @@ private:
 
 class MacroStorage
 {
+public:
 	NONCOPYABLE(MacroStorage);
 	DEFAULT_MOVABLE(MacroStorage);
 private:
@@ -192,12 +192,14 @@ public:
 	using Undefined = NameError<UndefinedTag>;
 	class Record
 	{
+	public:
 		DEFAULT_COPYABLE(Record);
 		DEFAULT_MOVABLE(Record);
-	public:
 		~Record() = default;
 		Record() noexcept : m_line(0) { }
-		Record(std::string file, int line, std::string contents)
+		Record(std::string file,
+		       int line,
+		       std::string contents) noexcept
 			: m_file(std::move(file)),
 			  m_line(line),
 			  m_contents(std::move(contents))
@@ -256,9 +258,9 @@ private:
 template <class Container_, class Iter_=typename Container_::const_iterator>
 class Region
 {
+public:
 	DEFAULT_COPYABLE(Region);
 	DEFAULT_MOVABLE(Region);
-public:
 	using ValueType = typename Iter_::value_type;
 public:
 	~Region() = default;
@@ -349,6 +351,7 @@ using ConstStringRegion = Region<const std::string>;
 
 class MacroProcessor
 {
+public:
 	NONCOPYABLE(MacroProcessor);
 	DEFAULT_MOVABLE(MacroProcessor);
 private:
@@ -361,8 +364,8 @@ public:
 private:
 	class Locker
 	{
-		NONCOPYABLE(Locker);
 		friend class MacroProcessor;
+		NONCOPYABLE(Locker);
 		Locker &operator = (Locker &&) = delete;
 	public:
 		~Locker() noexcept
@@ -485,6 +488,7 @@ private:
 
 class PathList
 {
+public:
 	NONCOPYABLE(PathList);
 	DEFAULT_MOVABLE(PathList);
 private:
@@ -533,17 +537,22 @@ private:
 
 class IncludeProcessor
 {
+public:
 	NONCOPYABLE(IncludeProcessor);
 	DEFAULT_MOVABLE(IncludeProcessor);
+private:
+	class Locker;
 public:
 	class Record
 	{
+	public:
 		DEFAULT_COPYABLE(Record);
 		DEFAULT_MOVABLE(Record);
-	public:
 		~Record() = default;
 		Record() : m_base_line(0) { }
-		Record(std::string file, std::string base_file, int base_line)
+		Record(std::string file,
+		       std::string base_file,
+		       int base_line) noexcept
 			: m_file(std::move(file)),
 			  m_base_file(std::move(base_file)),
 			  m_base_line(base_line)
@@ -581,8 +590,8 @@ public:
 private:
 	class Locker
 	{
-		NONCOPYABLE(Locker);
 		friend class IncludeProcessor;
+		NONCOPYABLE(Locker);
 		Locker &operator = (Locker &&) = delete;
 	public:
 		~Locker() noexcept
@@ -592,10 +601,8 @@ private:
 		}
 		Locker(Locker &&rh) noexcept : m_ip(reset_pointer(&rh.m_ip)) { }
 	private:
-		Locker(IncludeProcessor &ip,
-		       std::string name,
-		       std::string base_file="",
-		       int base_line=0) : m_ip(&ip)
+		Locker(IncludeProcessor &ip, std::string name,
+		       std::string base_file, int base_line) : m_ip(&ip)
 		{
 			try {
 				m_ip->m_loop_detector.push(
@@ -639,9 +646,9 @@ private:
 
 class FileContext
 {
+public:
 	NONCOPYABLE(FileContext);
 	NONMOVABLE(FileContext);
-public:
 	~FileContext() = default;
 	MacroProcessor &get_macro_processor() const noexcept
 	{
