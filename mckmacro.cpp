@@ -126,7 +126,7 @@ public:
 	using Stack = std::list<Record_>;
 public:
 	~LoopDetector() = default;
-	LoopDetector() noexcept : m_freeze(false) { }
+	LoopDetector() = default;
 	bool is_loop(const std::string &name) const noexcept
 	{
 		return m_set.find(name) != m_set.end();
@@ -178,7 +178,7 @@ private:
 	using Set = std::set<std::string>;
 	Set m_set;
 	Stack m_stack;
-	bool m_freeze;
+	bool m_freeze = true;
 };
 
 class MacroStorage
@@ -196,7 +196,7 @@ public:
 		DEFAULT_COPYABLE(Record);
 		DEFAULT_MOVABLE(Record);
 		~Record() = default;
-		Record() noexcept : m_line(0) { }
+		Record() = default;
 		Record(std::string file,
 		       int line,
 		       std::string contents) noexcept
@@ -219,7 +219,7 @@ public:
 		}
 	private:
 		std::string m_file;
-		int m_line;
+		int m_line = 0;
 		std::string m_contents;
 	};
 public:
@@ -394,7 +394,7 @@ private:
 	};
 public:
 	~MacroProcessor() = default;
-	MacroProcessor() noexcept : m_auto_scope(false) { }
+	MacroProcessor() = default;
 	Locker lock(const std::string &name)
 	{
 		return Locker(m_loop_detector, query_and_lock_(name));
@@ -482,7 +482,7 @@ private:
 private:
 	MacroStorage m_storage;
 	LoopDet m_loop_detector;
-	bool m_auto_scope;
+	bool m_auto_scope = false;
 	std::string m_current_scope;
 };
 
@@ -549,7 +549,7 @@ public:
 		DEFAULT_COPYABLE(Record);
 		DEFAULT_MOVABLE(Record);
 		~Record() = default;
-		Record() : m_base_line(0) { }
+		Record() = default;
 		Record(std::string file,
 		       std::string base_file,
 		       int base_line) noexcept
@@ -581,7 +581,7 @@ public:
 	private:
 		std::string m_file;
 		std::string m_base_file;
-		int m_base_line;
+		int m_base_line = 0;
 	};
 public:
 	using Stack = LoopDetector<Record>::Stack;
@@ -694,8 +694,7 @@ private:
 		  m_input_file_name(std::move(input_file_name)),
 		  m_input_stream(input_stream),
 		  m_output_file_name(std::move(output_file_name)),
-		  m_output_stream(output_stream),
-		  m_line_number(0)
+		  m_output_stream(output_stream)
 	{
 	}
 	bool do_define_macro_(ConstStringRegion) const;
@@ -720,7 +719,7 @@ private:
 	std::istream &m_input_stream;
 	std::string m_output_file_name;
 	std::ostream &m_output_stream;
-	int m_line_number;
+	int m_line_number = 0;
 	static const DirectiveMap s_directive_pair;
 };
 
