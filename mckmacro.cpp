@@ -672,6 +672,8 @@ public:
 			    output_stream).process_();
 	}
 private:
+	using DirectiveHandler = bool (FileContext::*)(ConstStringRegion) const;
+	using DirectiveMap = std::map<char, DirectiveHandler>;
 	FileContext(MacroProcessor &macro_processor,
 		    IncludeProcessor &include_processor,
 		    std::ostream &logger,
@@ -689,33 +691,17 @@ private:
 		  m_line_number(0)
 	{
 	}
-	void do_define_macro_(ConstStringRegion) const;
-	void do_undef_macro_(ConstStringRegion) const;
-	void do_include_(ConstStringRegion) const;
-	void do_set_scope_(ConstStringRegion) const;
+	bool do_define_macro_(ConstStringRegion) const;
+	bool do_undef_macro_(ConstStringRegion) const;
+	bool do_include_(ConstStringRegion) const;
+	bool do_set_scope_(ConstStringRegion) const;
 	static bool skip_macro_directive_chars_(ConstStringRegion *input);
-	bool directive_(ConstStringRegion,
-			void (FileContext::*)(ConstStringRegion) const,
-			const char) const;
-	bool define_macro_(const ConstStringRegion &input) const
+	bool directive_(ConstStringRegion) const;
+	static DirectiveHandler search_directive_handler_(char ch)
 	{
-		return directive_(input, &FileContext::do_define_macro_,
-				  MACRO_DEF_CHAR);
-	}
-	bool undef_macro_(const ConstStringRegion &input) const
-	{
-		return directive_(input, &FileContext::do_undef_macro_,
-				  MACRO_UNDEF_CHAR);
-	}
-	bool set_scope_(const ConstStringRegion &input) const
-	{
-		return directive_(input, &FileContext::do_set_scope_,
-				  SCOPE_CHAR);
-	}
-	bool include_(const ConstStringRegion &input) const
-	{
-		return directive_(input, &FileContext::do_include_,
-				  INCLUDE_CHAR);
+		auto i = s_directive_pair.find(ch);
+
+		return i != s_directive_pair.end() ? i->second : nullptr;
 	}
 	std::string expand_(ConstStringRegion) const;
 	void process_();
@@ -728,6 +714,14 @@ private:
 	std::string m_output_file_name;
 	std::ostream &m_output_stream;
 	int m_line_number;
+	static const DirectiveMap s_directive_pair;
+};
+
+const FileContext::DirectiveMap FileContext::s_directive_pair = {
+	{ MACRO_DEF_CHAR, &FileContext::do_define_macro_ },
+	{ MACRO_UNDEF_CHAR, &FileContext::do_undef_macro_ },
+	{ SCOPE_CHAR, &FileContext::do_set_scope_ },
+	{ INCLUDE_CHAR, &FileContext::do_include_ }
 };
 
 void
@@ -831,7 +825,7 @@ get_string(ConstStringRegion input, bool *quoted = NULL)
 	return std::string(ConstStringRegion(begin, ++end));
 }
 
-void
+bool
 FileContext::do_define_macro_(ConstStringRegion input) const
 {
 	auto additional = std::string(" "); // default: add one space character
@@ -850,15 +844,19 @@ FileContext::do_define_macro_(ConstStringRegion input) const
 					 m_input_file_name, m_line_number,
 					 str + additional);
 	}
+	m_output_stream << std::endl;
+	return true;
 }
 
-void
+bool
 FileContext::do_undef_macro_(ConstStringRegion input) const
 {
 	m_macro_processor.undef(get_macro_name(&input));
+	m_output_stream << std::endl;
+	return true;
 }
 
-void
+bool
 FileContext::do_include_(ConstStringRegion input) const
 {
 	std::ifstream ifs;
@@ -873,22 +871,25 @@ FileContext::do_include_(ConstStringRegion input) const
 		    ifs,
 		    m_output_file_name,
 		    m_output_stream).process_();
+	return true;
 }
 
-void
+bool
 FileContext::do_set_scope_(ConstStringRegion input) const
 {
 	if (!input.is_end()) {
 		switch (*input) {
 		case SCOPE_AUTO_ON:
 			m_macro_processor.set_auto_scope_mode(true);
-			return;
+			return true;
 		case SCOPE_AUTO_OFF:
 			m_macro_processor.set_auto_scope_mode(false);
-			return;
+			return true;
 		}
 	}
 	m_macro_processor.set_scope(get_scope_name(&input));
+	m_output_stream << std::endl;
+	return true;
 }
 
 bool
@@ -899,18 +900,19 @@ FileContext::skip_macro_directive_chars_(ConstStringRegion *input)
 }
 
 bool
-FileContext::directive_(ConstStringRegion input,
-			void (FileContext::*dofunc_)(ConstStringRegion) const,
-			const char dirchar) const
+FileContext::directive_(ConstStringRegion input) const
 {
 
-	if (skip_macro_directive_chars_(&input) && *input == dirchar) {
-		++input;
-		(this->*dofunc_)(input);
-		return true;
+	if (skip_macro_directive_chars_(&input)) {
+		auto h = search_directive_handler_(*input);
+		if (h) {
+			++input;
+			return (this->*h)(input);
+		}
 	}
 	return false;
 }
+
 
 std::string
 FileContext::expand_(ConstStringRegion input) const
@@ -993,15 +995,7 @@ FileContext::process_()
 
 			getline(m_input_stream, input);
 			m_line_number++;
-			if (this->define_macro_(input))
-				m_output_stream << std::endl;
-			else if (this->undef_macro_(input))
-				m_output_stream << std::endl;
-			else if (this->set_scope_(input))
-				m_output_stream << std::endl;
-			else if (this->include_(input))
-				;
-			else {
+			if (!this->directive_(input)) {
 				if (m_macro_processor.is_auto_scope() &&
 				    input.size() > 0 &&
 				    isalpha((int)(unsigned char)input[0])) {
