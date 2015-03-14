@@ -403,14 +403,6 @@ public:
 	{
 		m_current_scope = std::move(s);
 	}
-	void set_auto_scope_mode(bool mode) noexcept
-	{
-		m_auto_scope = mode;
-	}
-	bool is_auto_scope() const noexcept
-	{
-		return m_auto_scope;
-	}
 	void undef(std::string name)
 	{
 		m_storage.undef(make_scoped_(std::move(name)));
@@ -482,7 +474,6 @@ private:
 private:
 	MacroStorage m_storage;
 	LoopDet m_loop_detector;
-	bool m_auto_scope = false;
 	std::string m_current_scope;
 };
 
@@ -678,12 +669,21 @@ public:
 	{
 		return m_output_stream;
 	}
+	void set_auto_scope_mode(bool mode) noexcept
+	{
+		m_auto_scope = mode;
+	}
+	bool is_auto_scope() const noexcept
+	{
+		return m_auto_scope;
+	}
 private:
 	MacroProcessor m_macro_processor;
 	IncludeProcessor m_include_processor;
 	std::string m_output_file_name;
 	std::ostream &m_output_stream;
 	std::ostream &m_logger;
+	bool m_auto_scope = false;
 };
 
 class FileContext
@@ -930,10 +930,10 @@ FileContext::do_set_scope_(ConstStringRegion input) const
 	if (!input.is_end()) {
 		switch (*input) {
 		case SCOPE_AUTO_ON:
-			macro_processor().set_auto_scope_mode(true);
+			m_compile_unit_context.set_auto_scope_mode(true);
 			return true;
 		case SCOPE_AUTO_OFF:
-			macro_processor().set_auto_scope_mode(false);
+			m_compile_unit_context.set_auto_scope_mode(false);
 			return true;
 		}
 	}
@@ -1046,7 +1046,7 @@ FileContext::process_()
 			getline(m_input_stream, input);
 			m_line_number++;
 			if (!this->directive_(input)) {
-				if (macro_processor().is_auto_scope() &&
+				if (m_compile_unit_context.is_auto_scope() &&
 				    input.size() > 0 &&
 				    isalpha((int)(unsigned char)input[0])) {
 					macro_processor().set_scope(
