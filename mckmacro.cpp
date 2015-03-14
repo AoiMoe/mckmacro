@@ -730,6 +730,9 @@ const FileContext::DirectiveMap FileContext::s_directive_pair = {
 	{ INCLUDE_CHAR, &FileContext::do_include_ }
 };
 
+namespace
+{
+
 void
 skip_ws(ConstStringRegion *pr)
 {
@@ -830,6 +833,8 @@ get_string(ConstStringRegion input, bool *quoted = NULL)
 
 	return std::string(ConstStringRegion(begin, ++end));
 }
+
+} // namespace <anonymous>
 
 bool
 FileContext::do_define_macro_(ConstStringRegion input) const
@@ -1057,6 +1062,9 @@ FileContext::process_()
 	}
 }
 
+namespace
+{
+
 auto f_banner = true;
 
 void
@@ -1090,6 +1098,8 @@ errx(int excode, const char *fmt)
 	warnx(fmt);
 	exit(excode);
 }
+
+} // namespace <anonymous>
 
 template <class BaseStream> struct StreamTraits;
 
