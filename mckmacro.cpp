@@ -644,19 +644,77 @@ private:
 	PathList m_path_list;
 };
 
+class CompileUnitContext
+{
+	NONCOPYABLE(CompileUnitContext);
+	NONMOVABLE(CompileUnitContext);
+public:
+	~CompileUnitContext() = default;
+	CompileUnitContext(std::string ofname,
+			   std::ostream &ofs,
+			   std::ostream &lgr) noexcept
+		: m_output_file_name(std::move(ofname)),
+		  m_output_stream(ofs),
+		  m_logger(lgr)
+	{
+	}
+	MacroProcessor &macro_processor() noexcept
+	{
+		return m_macro_processor;
+	}
+	IncludeProcessor &include_processor() noexcept
+	{
+		return m_include_processor;
+	}
+	std::ostream &logger() noexcept
+	{
+		return m_logger;
+	}
+	const std::string &get_output_file_name() const noexcept
+	{
+		return m_output_file_name;
+	}
+	std::ostream &output_stream() noexcept
+	{
+		return m_output_stream;
+	}
+private:
+	MacroProcessor m_macro_processor;
+	IncludeProcessor m_include_processor;
+	std::string m_output_file_name;
+	std::ostream &m_output_stream;
+	std::ostream &m_logger;
+};
+
 class FileContext
 {
 public:
 	NONCOPYABLE(FileContext);
 	NONMOVABLE(FileContext);
 	~FileContext() = default;
-	MacroProcessor &get_macro_processor() const noexcept
+	MacroProcessor &macro_processor() const noexcept
 	{
-		return m_macro_processor;
+		return m_compile_unit_context.macro_processor();
+	}
+	IncludeProcessor &include_processor() const noexcept
+	{
+		return m_compile_unit_context.include_processor();
+	}
+	std::ostream &output_stream() const noexcept
+	{
+		return m_compile_unit_context.output_stream();
+	}
+	const std::string &get_output_file_name() const noexcept
+	{
+		return m_compile_unit_context.get_output_file_name();
+	}
+	std::ostream &logger() const noexcept
+	{
+		return m_compile_unit_context.logger();
 	}
 	void put_message(std::string fac, std::string msg) const
 	{
-		m_logger << std::move(fac)
+		logger() << std::move(fac)
 			 << " at line " << m_line_number << " in "
 			 << m_input_file_name << ": "
 			 << std::move(msg) << std::endl;
@@ -667,34 +725,23 @@ public:
 			    std::string output_name,
 			    std::ostream &output_stream)
 	{
-		MacroProcessor macro_processor;
-		IncludeProcessor include_processor;
+		CompileUnitContext ctx(std::move(output_name),
+				       output_stream,
+				       logger);
 
-		FileContext(macro_processor,
-			    include_processor,
-			    logger,
+		FileContext(ctx,
 			    std::move(input_name),
-			    input_stream,
-			    std::move(output_name),
-			    output_stream).process_();
+			    input_stream).process_();
 	}
 private:
 	using DirectiveHandler = bool (FileContext::*)(ConstStringRegion) const;
 	using DirectiveMap = std::map<char, DirectiveHandler>;
-	FileContext(MacroProcessor &macro_processor,
-		    IncludeProcessor &include_processor,
-		    std::ostream &logger,
+	FileContext(CompileUnitContext &cuctx,
 		    std::string input_file_name,
-		    std::istream &input_stream,
-		    std::string output_file_name,
-		    std::ostream &output_stream)
-		: m_macro_processor(macro_processor),
-		  m_include_processor(include_processor),
-		  m_logger(logger),
+		    std::istream &input_stream)
+		: m_compile_unit_context(cuctx),
 		  m_input_file_name(std::move(input_file_name)),
-		  m_input_stream(input_stream),
-		  m_output_file_name(std::move(output_file_name)),
-		  m_output_stream(output_stream)
+		  m_input_stream(input_stream)
 	{
 	}
 	bool do_define_macro_(ConstStringRegion) const;
@@ -712,13 +759,9 @@ private:
 	std::string expand_(ConstStringRegion) const;
 	void process_();
 private:
-	MacroProcessor &m_macro_processor;
-	IncludeProcessor &m_include_processor;
-	std::ostream &m_logger;
+	CompileUnitContext &m_compile_unit_context;
 	std::string m_input_file_name;
 	std::istream &m_input_stream;
-	std::string m_output_file_name;
-	std::ostream &m_output_stream;
 	int m_line_number = 0;
 	static const DirectiveMap s_directive_pair;
 };
@@ -845,25 +888,25 @@ FileContext::do_define_macro_(ConstStringRegion input) const
 	auto name = get_macro_name(&input);
 	auto str = get_string(input, &quoted);
 	if (str.empty() && !quoted) {
-//		m_macro_processor.undef(name);
-		m_macro_processor.define(name,
+//		macro_processor().undef(name);
+		macro_processor().define(name,
 					 m_input_file_name, m_line_number, "");
 	} else {
 		if (quoted)
 			additional = "";
-		m_macro_processor.define(name,
+		macro_processor().define(name,
 					 m_input_file_name, m_line_number,
 					 str + additional);
 	}
-	m_output_stream << std::endl;
+	output_stream() << std::endl;
 	return true;
 }
 
 bool
 FileContext::do_undef_macro_(ConstStringRegion input) const
 {
-	m_macro_processor.undef(get_macro_name(&input));
-	m_output_stream << std::endl;
+	macro_processor().undef(get_macro_name(&input));
+	output_stream() << std::endl;
 	return true;
 }
 
@@ -873,15 +916,11 @@ FileContext::do_include_(ConstStringRegion input) const
 	std::ifstream ifs;
 
 	auto file = get_string(input);
-	m_include_processor.open(ifs, file);
+	include_processor().open(ifs, file);
 
-	FileContext(m_macro_processor,
-		    m_include_processor,
-		    m_logger,
+	FileContext(m_compile_unit_context,
 		    file,
-		    ifs,
-		    m_output_file_name,
-		    m_output_stream).process_();
+		    ifs).process_();
 	return true;
 }
 
@@ -891,15 +930,15 @@ FileContext::do_set_scope_(ConstStringRegion input) const
 	if (!input.is_end()) {
 		switch (*input) {
 		case SCOPE_AUTO_ON:
-			m_macro_processor.set_auto_scope_mode(true);
+			macro_processor().set_auto_scope_mode(true);
 			return true;
 		case SCOPE_AUTO_OFF:
-			m_macro_processor.set_auto_scope_mode(false);
+			macro_processor().set_auto_scope_mode(false);
 			return true;
 		}
 	}
-	m_macro_processor.set_scope(get_scope_name(&input));
-	m_output_stream << std::endl;
+	macro_processor().set_scope(get_scope_name(&input));
+	output_stream() << std::endl;
 	return true;
 }
 
@@ -959,7 +998,7 @@ FileContext::expand_(ConstStringRegion input) const
 			out += std::string(ConstStringRegion(begin, --tmp));
 			enter_out = true;
 			try {
-				auto locker = m_macro_processor.lock(
+				auto locker = macro_processor().lock(
 					get_macro_name(&input));
 				out += this->expand_(locker.query());
 			}
@@ -999,7 +1038,7 @@ void
 FileContext::process_()
 {
 	try {
-		m_include_processor.lock(m_input_file_name);
+		include_processor().lock(m_input_file_name);
 
 		while (m_input_stream.good()) {
 			std::string input;
@@ -1007,18 +1046,18 @@ FileContext::process_()
 			getline(m_input_stream, input);
 			m_line_number++;
 			if (!this->directive_(input)) {
-				if (m_macro_processor.is_auto_scope() &&
+				if (macro_processor().is_auto_scope() &&
 				    input.size() > 0 &&
 				    isalpha((int)(unsigned char)input[0])) {
-					m_macro_processor.set_scope(
+					macro_processor().set_scope(
 						std::string(1, input[0]));
 				}
-				m_output_stream << this->expand_(input)
+				output_stream() << this->expand_(input)
 						<< std::endl;
 			}
-			if (m_output_stream.bad())
+			if (output_stream().bad())
 				throw SimpleEx("cannot write to file \"" +
-					       m_output_file_name + "\"");
+					       get_output_file_name() + "\"");
 		}
 	}
 	catch (SimpleEx &ex) {
@@ -1031,9 +1070,9 @@ FileContext::process_()
 				  MACRO_CHAR +
 				  ex.get_name() +
 				  " is looped:");
-		for (auto &mname : m_macro_processor.get_stack()) {
-			auto &rec = m_macro_processor.query(mname);
-			m_logger << "\t" << MACRO_CHAR << mname
+		for (auto &mname : macro_processor().get_stack()) {
+			auto &rec = macro_processor().query(mname);
+			logger() << "\t" << MACRO_CHAR << mname
 				 << " defined at line " << rec.get_line()
 				 << " in " << rec.get_file()
 				 << std::endl;
@@ -1044,10 +1083,10 @@ FileContext::process_()
 		this->put_message("error",
 				  "including file \""+ex.get_name()+
 				  "\" is looped:");
-		for (auto &rec : m_include_processor.get_stack()) {
+		for (auto &rec : include_processor().get_stack()) {
 			if (rec.get_base_file().empty())
 				break;
-			m_logger << "\t\"" << rec.get_file()
+			logger() << "\t\"" << rec.get_file()
 				 << "\" include at line " << rec.get_base_line()
 				 << " in \"" << rec.get_base_file() << "\""
 				 << std::endl;
