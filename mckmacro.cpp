@@ -1038,7 +1038,7 @@ void
 FileContext::process_()
 {
 	try {
-		include_processor().lock(m_input_file_name);
+		auto locker = include_processor().lock(m_input_file_name);
 
 		while (m_input_stream.good()) {
 			std::string input;
