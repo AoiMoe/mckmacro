@@ -35,6 +35,7 @@
 #include <cctype>
 #include <exception>
 #include <type_traits>
+#include <functional>
 
 #define COPYABLENESS_(name, designator)					\
 	name(const name &) = designator;				\
@@ -677,6 +678,14 @@ public:
 	{
 		return m_auto_scope;
 	}
+	void incr_error_count() noexcept
+	{
+		m_error_count++;
+	}
+	void incr_warn_count() noexcept
+	{
+		m_warn_count++;
+	}
 private:
 	MacroProcessor m_macro_processor;
 	IncludeProcessor m_include_processor;
@@ -684,6 +693,8 @@ private:
 	std::ostream &m_output_stream;
 	std::ostream &m_logger;
 	bool m_auto_scope = false;
+	int m_error_count = 0;
+	int m_warn_count = 0;
 };
 
 class FileContext
@@ -691,6 +702,8 @@ class FileContext
 public:
 	NONCOPYABLE(FileContext);
 	NONMOVABLE(FileContext);
+	using MessageHook = void (std::ostream &);
+	using MessageHookVar = std::function<MessageHook>;
 	~FileContext() = default;
 	MacroProcessor &macro_processor() const noexcept
 	{
@@ -712,12 +725,25 @@ public:
 	{
 		return m_compile_unit_context.logger();
 	}
-	void put_message(std::string fac, std::string msg) const
+	void put_message(const std::string &fac, const std::string &msg,
+			 MessageHookVar additional = noneMessageHook_) const
 	{
-		logger() << std::move(fac)
-			 << " at line " << m_line_number << " in "
-			 << m_input_file_name << ": "
-			 << std::move(msg) << std::endl;
+		logger() << fac << " at line " << m_line_number << " in "
+			 << m_input_file_name << ": " << msg << std::endl;
+		additional(logger());
+	}
+	void error(const std::string &msg,
+		   MessageHookVar additional = noneMessageHook_) const
+	{
+		m_compile_unit_context.incr_error_count();
+		put_message(s_error, msg, additional);
+		throw ExitFailure();
+	}
+	void warning(const std::string &msg,
+		     MessageHookVar additional = noneMessageHook_) const
+	{
+		m_compile_unit_context.incr_warn_count();
+		put_message(s_warning, msg, additional);
 	}
 	static void process(CompileUnitContext &ctx,
 			    std::string input_name,
@@ -752,12 +778,15 @@ private:
 	}
 	std::string expand_(ConstStringRegion) const;
 	void process_();
+	static void noneMessageHook_(std::ostream &) { }
 private:
 	CompileUnitContext &m_compile_unit_context;
 	std::string m_input_file_name;
 	std::istream &m_input_stream;
 	int m_line_number = 0;
 	static const DirectiveMap s_directive_pair;
+	static const std::string s_error;
+	static const std::string s_warning;
 };
 
 const FileContext::DirectiveMap FileContext::s_directive_pair = {
@@ -766,6 +795,9 @@ const FileContext::DirectiveMap FileContext::s_directive_pair = {
 	{ SCOPE_CHAR, &FileContext::do_set_scope_ },
 	{ INCLUDE_CHAR, &FileContext::do_include_ }
 };
+
+const std::string FileContext::s_error = "error";
+const std::string FileContext::s_warning = "warning";
 
 namespace
 {
@@ -997,17 +1029,9 @@ FileContext::expand_(ConstStringRegion input) const
 				out += this->expand_(locker.query());
 			}
 			catch (MacroProcessor::Undefined &ex) {
-#if 1
 				throw SimpleEx(std::string("macro \"")+
 					       MACRO_CHAR+ex.get_name()+
 					       "\" is not defined.");
-#else
-				this->put_message(
-					"warning",
-					std::string("macro \"")+
-					MACRO_CHAR+ex.get_name()+
-					"\" is not defined.");
-#endif
 			}
 			if (!input.is_end() && isspace(*input))
 				++input;
@@ -1055,43 +1079,41 @@ FileContext::process_()
 		}
 	}
 	catch (SimpleEx &ex) {
-		this->put_message("error", ex.what());
-		throw ExitFailure();
+		error(ex.what());
 	}
 	catch (MacroProcessor::Looped &ex) {
-		this->put_message("error",
-				  std::string("macro ") +
-				  MACRO_CHAR +
-				  ex.get_name() +
-				  " is looped:");
-		for (auto &mname : macro_processor().get_stack()) {
-			auto &rec = macro_processor().query(mname);
-			logger() << "\t" << MACRO_CHAR << mname
-				 << " defined at line " << rec.get_line()
-				 << " in " << rec.get_file()
-				 << std::endl;
-		}
-		throw ExitFailure();
+		error(std::string("macro ") + MACRO_CHAR + ex.get_name() +
+		      " is looped:",
+		      [this](std::ostream &os) {
+			      MacroProcessor &m = macro_processor();
+			      for (auto &mname : m.get_stack()) {
+				      auto &rec = m.query(mname);
+				      os << "\t" << MACRO_CHAR << mname
+					 << " defined at line "
+					 << rec.get_line()
+					 << " in " << rec.get_file()
+					 << std::endl;
+			      }
+		      });
 	}
 	catch (IncludeProcessor::Looped &ex) {
-		this->put_message("error",
-				  "including file \""+ex.get_name()+
-				  "\" is looped:");
-		for (auto &rec : include_processor().get_stack()) {
-			if (rec.get_base_file().empty())
-				break;
-			logger() << "\t\"" << rec.get_file()
-				 << "\" include at line " << rec.get_base_line()
-				 << " in \"" << rec.get_base_file() << "\""
-				 << std::endl;
-		}
-		throw ExitFailure();
+		error("including file \"" + ex.get_name() + "\" is looped:",
+		      [this](std::ostream &os) {
+			      IncludeProcessor &i = include_processor();
+			      for (auto &rec : i.get_stack()) {
+				      if (rec.get_base_file().empty())
+					      break;
+				      os << "\t\"" << rec.get_file()
+					 << "\" include at line "
+					 << rec.get_base_line()
+					 << " in \"" << rec.get_base_file()
+					 << "\""
+					 << std::endl;
+			      }
+		      });
 	}
 	catch (PathList::CannotOpen &ex) {
-		this->put_message("error",
-				  "file \""+ex.get_name()+
-				  "\" cannot be opened.");
-		throw ExitFailure();
+		error("file \""+ex.get_name() + "\" cannot be opened.");
 	}
 }
 
