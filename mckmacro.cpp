@@ -719,16 +719,10 @@ public:
 			 << m_input_file_name << ": "
 			 << std::move(msg) << std::endl;
 	}
-	static void process(std::ostream &logger,
+	static void process(CompileUnitContext &ctx,
 			    std::string input_name,
-			    std::istream &input_stream,
-			    std::string output_name,
-			    std::ostream &output_stream)
+			    std::istream &input_stream)
 	{
-		CompileUnitContext ctx(std::move(output_name),
-				       output_stream,
-				       logger);
-
 		FileContext(ctx,
 			    std::move(input_name),
 			    input_stream).process_();
@@ -1253,11 +1247,13 @@ main(int argc, char **argv)
 		input.open();
 		output.open();
 
-		FileContext::process(std::cerr,
+		CompileUnitContext ctx(output.get_file_name(),
+				       output.get_stream(),
+				       std::cerr);
+
+		FileContext::process(ctx,
 				     input.get_file_name(),
-				     input.get_stream(),
-				     output.get_file_name(),
-				     output.get_stream());
+				     input.get_stream());
 	} catch (Exit &ex) {
 		return ex.get_code();
 	}
