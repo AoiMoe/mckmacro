@@ -98,6 +98,7 @@ public:
 	}
 };
 
+template <typename Tag_>
 class SimpleEx
 {
 	std::string m_message;
@@ -106,6 +107,12 @@ public:
 	~SimpleEx() = default;
 	const std::string &what() const noexcept { return m_message; }
 };
+
+struct SyntaxErrorTag { };
+struct FatalErrorTag { };
+
+using SyntaxError = SimpleEx<SyntaxErrorTag>;
+using FatalError = SimpleEx<FatalErrorTag>;
 
 constexpr auto DIRECTIVE_CHAR = '#';
 constexpr auto MACRO_CHAR = '\\';
@@ -346,9 +353,9 @@ private:
 	void ensure_not_end_(std::string funcname) const
 	{
 		if (m_curpos == m_end)
-			throw SimpleEx("Region::"+
-				       std::move(funcname)+
-				       ": internal error.");
+			throw FatalError("Region::"+
+					 std::move(funcname)+
+					 ": internal error.");
 	}
 private:
 	Iter_ m_curpos, m_end;
@@ -387,7 +394,7 @@ private:
 		const std::string &query() const
 		{
 			if (!m_result)
-				throw SimpleEx("internal error.");
+				throw FatalError("internal error.");
 			return m_result->get_contents();
 		}
 	private:
@@ -699,6 +706,14 @@ public:
 	{
 		return m_warning_as_error;
 	}
+	int get_error_count() noexcept
+	{
+		return m_error_count;
+	}
+	int get_warn_count() noexcept
+	{
+		return m_warn_count;
+	}
 	void incr_error_count() noexcept
 	{
 		m_error_count++;
@@ -760,11 +775,16 @@ public:
 	{
 		m_compile_unit_context.incr_error_count();
 		put_message(s_error, msg, additional);
-		throw ExitFailure();
+		if (m_compile_unit_context.is_error_as_fatal())
+			throw ExitFailure();
 	}
 	void warning(const std::string &msg,
 		     MessageHookVar additional = noneMessageHook_) const
 	{
+		if (m_compile_unit_context.is_warning_as_error()) {
+			error(msg, additional);
+			return;
+		}
 		m_compile_unit_context.incr_warn_count();
 		put_message(s_warning, msg, additional);
 	}
@@ -772,6 +792,8 @@ public:
 			    std::string input_name,
 			    std::istream &input_stream)
 	{
+		auto locker = ctx.include_processor().lock(input_name);
+
 		FileContext(ctx,
 			    std::move(input_name),
 			    input_stream).process_();
@@ -791,13 +813,56 @@ private:
 	bool do_undef_macro_(ConstStringRegion) const;
 	bool do_include_(ConstStringRegion) const;
 	bool do_set_scope_(ConstStringRegion) const;
-	static bool skip_macro_directive_chars_(ConstStringRegion *input);
+	static bool skip_macro_directive_chars_(ConstStringRegion *) noexcept;
 	bool directive_(ConstStringRegion) const;
 	static DirectiveHandler search_directive_handler_(char ch)
 	{
 		auto i = s_directive_pair.find(ch);
 
 		return i != s_directive_pair.end() ? i->second : nullptr;
+	}
+	void dump_macro_stack(std::ostream &os) const noexcept
+	{
+		try {
+			MacroProcessor &m = macro_processor();
+
+			for (auto &mname : m.get_stack()) {
+				auto &rec = m.query(mname);
+				os << "\t" << MACRO_CHAR << mname
+				   << " defined at line " << rec.get_line()
+				   << " in " << rec.get_file() << std::endl;
+			}
+		}
+		catch (...) {
+		}
+	}
+	void show_include_record_(std::ostream &os,
+				  const std::string &file,
+				  const std::string &base_file,
+				  int base_line) const
+	{
+		os << '\"' << file << "\" include at line " << base_line
+		   << " in \"" << base_file << "\"";
+	}
+	void dump_include_stack(std::ostream &os) const noexcept
+	{
+		try {
+			IncludeProcessor &i = include_processor();
+
+			for (auto &rec : i.get_stack()) {
+				if (rec.get_base_line()) {
+					os << '\t';
+					show_include_record_(
+						os,
+						rec.get_file(),
+						rec.get_base_file(),
+						rec.get_base_line());
+					os << std::endl;
+				}
+			}
+		}
+		catch (...) {
+		}
 	}
 	std::string expand_(ConstStringRegion) const;
 	void process_();
@@ -810,6 +875,7 @@ private:
 	static const DirectiveMap s_directive_pair;
 	static const std::string s_error;
 	static const std::string s_warning;
+	static const std::string s_fatal;
 };
 
 const FileContext::DirectiveMap FileContext::s_directive_pair = {
@@ -821,12 +887,13 @@ const FileContext::DirectiveMap FileContext::s_directive_pair = {
 
 const std::string FileContext::s_error = "error";
 const std::string FileContext::s_warning = "warning";
+const std::string FileContext::s_fatal = "fatal";
 
 namespace
 {
 
 void
-skip_ws(ConstStringRegion *pr)
+skip_ws(ConstStringRegion *pr) noexcept
 {
 	auto &r = *pr;
 	for (; !r.is_end(); ++r)
@@ -857,9 +924,9 @@ get_macro_name(ConstStringRegion *pr, bool *rscoped = NULL)
 			body = true;
 	}
 	if (scoped && !scoped_done)
-		throw SimpleEx("ill-formed macro scope.");
+		throw SyntaxError("ill-formed macro scope.");
 	if (!body)
-		throw SimpleEx("cannot get macro name.");
+		throw SyntaxError("cannot get macro name.");
 	if (rscoped)
 		*rscoped = scoped;
 	return ConstStringRegion(saved, r);
@@ -901,8 +968,8 @@ get_string(ConstStringRegion input, bool *quoted = NULL)
 				continue;
 			} else {
 				if (!quote_char)
-					throw SimpleEx("unexpected quote "
-						       "character.");
+					throw SyntaxError("unexpected quote "
+							  "character.");
 				quote_char = 0;
 				++input;
 				skip_ws(&input);
@@ -910,8 +977,9 @@ get_string(ConstStringRegion input, bool *quoted = NULL)
 					*quoted = true;
 				if (!input.is_end() &&
 				    *input != COMM_CHAR)
-					throw SimpleEx("unexpected character "
-						       "after quotation.");
+					throw SyntaxError(
+						"unexpected character "
+						"after quotation.");
 				break;
 			}
 		}
@@ -921,7 +989,7 @@ get_string(ConstStringRegion input, bool *quoted = NULL)
 			end = input;
 	}
 	if (quote_char)
-		throw SimpleEx("unclosed quotation.");
+		throw SyntaxError("unclosed quotation.");
 
 	return ConstStringRegion(begin, ++end);
 }
@@ -937,7 +1005,6 @@ FileContext::do_define_macro_(ConstStringRegion input) const
 	auto name = get_macro_name(&input);
 	auto str = get_string(input, &quoted);
 	if (str.empty() && !quoted) {
-//		macro_processor().undef(name);
 		macro_processor().define(name,
 					 m_input_file_name, m_line_number, "");
 	} else {
@@ -967,9 +1034,12 @@ FileContext::do_include_(ConstStringRegion input) const
 	auto file = get_string(input);
 	include_processor().open(ifs, file);
 
-	FileContext(m_compile_unit_context,
-		    file,
-		    ifs).process_();
+	auto locker = include_processor().lock(file,
+					       m_input_file_name,
+					       m_line_number);
+
+	FileContext(m_compile_unit_context, file, ifs).process_();
+
 	return true;
 }
 
@@ -992,7 +1062,7 @@ FileContext::do_set_scope_(ConstStringRegion input) const
 }
 
 bool
-FileContext::skip_macro_directive_chars_(ConstStringRegion *input)
+FileContext::skip_macro_directive_chars_(ConstStringRegion *input) noexcept
 {
 	skip_ws(input);
 	return input->length() > 1 && *(*input)++ == DIRECTIVE_CHAR;
@@ -1001,17 +1071,39 @@ FileContext::skip_macro_directive_chars_(ConstStringRegion *input)
 bool
 FileContext::directive_(ConstStringRegion input) const
 {
-
-	if (skip_macro_directive_chars_(&input)) {
-		auto h = search_directive_handler_(*input);
-		if (h) {
-			++input;
-			return (this->*h)(input);
+	const auto recover = input;
+	try {
+		if (skip_macro_directive_chars_(&input)) {
+			auto h = search_directive_handler_(*input);
+			if (h) {
+				++input;
+				return (this->*h)(input);
+			}
 		}
+		return false;
 	}
-	return false;
+	catch (SyntaxError &ex) {
+		error(ex.what());
+	}
+	catch (IncludeProcessor::Looped &ex) {
+		error("including file \"" + ex.get_name() + "\" is looped:",
+		      [this,&ex](std::ostream &os) {
+			      os << '\t';
+			      this->show_include_record_(
+				      os,
+				      ex.get_name(),
+				      m_input_file_name,
+				      m_line_number);
+			      os << std::endl;
+			      this->dump_include_stack(os);
+		      });
+	}
+	catch (PathList::CannotOpen &ex) {
+		error("file \""+ex.get_name() + "\" cannot be opened.");
+	}
+	output_stream() << std::string(recover) << std::endl;
+	return true;
 }
-
 
 std::string
 FileContext::expand_(ConstStringRegion input) const
@@ -1042,21 +1134,36 @@ FileContext::expand_(ConstStringRegion input) const
 				begin = ++input;
 				continue;
 			}
-			auto tmp = input;
-			out += ConstStringRegion(begin, --tmp);
+			auto recovery = input;
+			out += ConstStringRegion(begin, --recovery);
 			enter_out = true;
 			try {
-				auto locker = macro_processor().lock(
-					get_macro_name(&input));
+				auto macroname = get_macro_name(&input);
+				if (!input.is_end() && isspace(*input))
+					++input;
+				auto locker =
+				    macro_processor().lock(macroname);
 				out += this->expand_(locker.query());
 			}
-			catch (MacroProcessor::Undefined &ex) {
-				throw SimpleEx("macro \""_s+
-					       MACRO_CHAR+ex.get_name()+
-					       "\" is not defined.");
+			catch (MacroProcessor::Looped &ex) {
+				error("macro \""_s +
+				      MACRO_CHAR + ex.get_name() +
+				      "\" is looped:",
+				      [this](std::ostream &os) {
+					      dump_macro_stack(os);
+				      });
+				out += ConstStringRegion(recovery, input);
 			}
-			if (!input.is_end() && isspace(*input))
-				++input;
+			catch (MacroProcessor::Undefined &ex) {
+				error("macro \""_s +
+				      MACRO_CHAR + ex.get_name() +
+				      "\" is not defined.");
+				out += ConstStringRegion(recovery, input);
+			}
+			catch (SyntaxError &ex) {
+				error(ex.what());
+				out += ConstStringRegion(recovery, input);
+			}
 			begin = input;
 			continue;
 		}
@@ -1078,8 +1185,6 @@ void
 FileContext::process_()
 {
 	try {
-		auto locker = include_processor().lock(m_input_file_name);
-
 		while (m_input_stream.good()) {
 			std::string input;
 
@@ -1096,45 +1201,13 @@ FileContext::process_()
 						<< std::endl;
 			}
 			if (output_stream().bad())
-				throw SimpleEx("cannot write to file \"" +
-					       get_output_file_name() + "\"");
+				throw FatalError("cannot write to file \"" +
+						 get_output_file_name() + "\"");
 		}
 	}
-	catch (SimpleEx &ex) {
-		error(ex.what());
-	}
-	catch (MacroProcessor::Looped &ex) {
-		error("macro "_s + MACRO_CHAR + ex.get_name() + " is looped:",
-		      [this](std::ostream &os) {
-			      MacroProcessor &m = macro_processor();
-			      for (auto &mname : m.get_stack()) {
-				      auto &rec = m.query(mname);
-				      os << "\t" << MACRO_CHAR << mname
-					 << " defined at line "
-					 << rec.get_line()
-					 << " in " << rec.get_file()
-					 << std::endl;
-			      }
-		      });
-	}
-	catch (IncludeProcessor::Looped &ex) {
-		error("including file \"" + ex.get_name() + "\" is looped:",
-		      [this](std::ostream &os) {
-			      IncludeProcessor &i = include_processor();
-			      for (auto &rec : i.get_stack()) {
-				      if (rec.get_base_file().empty())
-					      break;
-				      os << "\t\"" << rec.get_file()
-					 << "\" include at line "
-					 << rec.get_base_line()
-					 << " in \"" << rec.get_base_file()
-					 << "\""
-					 << std::endl;
-			      }
-		      });
-	}
-	catch (PathList::CannotOpen &ex) {
-		error("file \""+ex.get_name() + "\" cannot be opened.");
+	catch (FatalError &ex) {
+		put_message(s_fatal, ex.what());
+		throw ExitFailure();
 	}
 }
 
@@ -1220,9 +1293,9 @@ public:
 		if (m_is_file && m_file_name != "-") {
 			m_file_stream.open(m_file_name);
 			if (m_file_stream.fail())
-				errx(EXIT_FAILURE,
-				     ("error: cannot open file \""_s+
-				      m_file_name+"\".").c_str());
+				throw FatalError(
+					"cannot open file \""_s+
+					m_file_name+"\".");
 			m_result_stream = &m_file_stream;
 		} else {
 			m_file_name = StreamTraits::stdio_name;
@@ -1251,6 +1324,7 @@ main(int argc, char **argv)
 	auto done = false;
 	auto error_as_fatal = false;
 	auto warning_as_error = false;
+	int ret = EXIT_SUCCESS;
 
 	argv++;
 	argc--;
@@ -1302,22 +1376,38 @@ main(int argc, char **argv)
 	banner();
 
 	try {
-		input.open();
-		output.open();
+		try {
+			input.open();
+			output.open();
+		}
+		catch (FatalError &ex) {
+			std::cerr << "fatal: " << ex.what() << std::endl;
+			throw ExitFailure();
+		}
 
 		CompileUnitContext ctx(output.get_file_name(),
 				       output.get_stream(),
 				       std::cerr);
+
 		ctx.set_error_as_fatal_mode(error_as_fatal);
 		ctx.set_warning_as_error_mode(warning_as_error);
 
 		FileContext::process(ctx,
 				     input.get_file_name(),
 				     input.get_stream());
+
+		if (ctx.get_error_count() || ctx.get_warn_count()) {
+			std::cerr << ctx.get_error_count() << " errors, "
+				  << ctx.get_warn_count() << " warnings."
+				  << std::endl;
+			if (ctx.get_error_count())
+				throw ExitFailure();
+		}
 	}
-	catch (Exit &ex) {
-		return ex.get_code();
+	catch (ExitFailure &ex) {
+		errx(EXIT_FAILURE, "compile failed.");
+		ret = EXIT_FAILURE;
 	}
 
-	return EXIT_SUCCESS;
+	return ret;
 }
