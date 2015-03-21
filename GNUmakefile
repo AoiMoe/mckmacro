@@ -4,7 +4,7 @@ endif
 SFX=.exe
 CXX=$(PFX)g++
 DBG=-g
-CDEFS=$(DBG) --exec-charset=cp932 -std=c++11 -Wall -pedantic
+CDEFS=$(DBG) --exec-charset=cp932 -std=c++11 -Wall -Wextra -Werror -pedantic
 LDFLAGS=$(DBG)
 
 SRCS=mckmacro.cpp
