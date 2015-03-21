@@ -49,6 +49,11 @@
 #define NONMOVABLE(name)		MOVABLENESS_(name, delete)
 #define DEFAULT_MOVABLE(name)		MOVABLENESS_(name, default)
 
+std::string operator "" _s (const char *str, std::size_t len)
+{
+	return std::string(str, len);
+}
+
 template <typename T_>
 typename std::enable_if<std::is_pointer<T_>::value, T_>::type
 reset_pointer(T_ *pp, T_ v = nullptr) noexcept
@@ -918,7 +923,7 @@ get_string(ConstStringRegion input, bool *quoted = NULL)
 	if (quote_char)
 		throw SimpleEx("unclosed quotation.");
 
-	return std::string(ConstStringRegion(begin, ++end));
+	return ConstStringRegion(begin, ++end);
 }
 
 } // namespace <anonymous>
@@ -926,7 +931,7 @@ get_string(ConstStringRegion input, bool *quoted = NULL)
 bool
 FileContext::do_define_macro_(ConstStringRegion input) const
 {
-	auto additional = std::string(" "); // default: add one space character
+	auto additional = " "_s; // default: add one space character
 	auto quoted = false;
 
 	auto name = get_macro_name(&input);
@@ -1031,15 +1036,14 @@ FileContext::expand_(ConstStringRegion input) const
 			macro_char = false;
 			if (*input == MACRO_CHAR || *input == COMM_CHAR) {
 				auto tmp = input;
-				out += std::string(ConstStringRegion(begin,
-								     --tmp));
+				out += ConstStringRegion(begin, --tmp);
 				out += *input;
 				enter_out = true;
 				begin = ++input;
 				continue;
 			}
 			auto tmp = input;
-			out += std::string(ConstStringRegion(begin, --tmp));
+			out += ConstStringRegion(begin, --tmp);
 			enter_out = true;
 			try {
 				auto locker = macro_processor().lock(
@@ -1047,7 +1051,7 @@ FileContext::expand_(ConstStringRegion input) const
 				out += this->expand_(locker.query());
 			}
 			catch (MacroProcessor::Undefined &ex) {
-				throw SimpleEx(std::string("macro \"")+
+				throw SimpleEx("macro \""_s+
 					       MACRO_CHAR+ex.get_name()+
 					       "\" is not defined.");
 			}
@@ -1064,7 +1068,7 @@ next:
 		++input;
 	}
 	if (enter_out) {
-		out += std::string(begin);
+		out += begin;
 		return out;
 	}
 	return saved;
@@ -1100,8 +1104,7 @@ FileContext::process_()
 		error(ex.what());
 	}
 	catch (MacroProcessor::Looped &ex) {
-		error(std::string("macro ") + MACRO_CHAR + ex.get_name() +
-		      " is looped:",
+		error("macro "_s + MACRO_CHAR + ex.get_name() + " is looped:",
 		      [this](std::ostream &os) {
 			      MacroProcessor &m = macro_processor();
 			      for (auto &mname : m.get_stack()) {
@@ -1218,7 +1221,7 @@ public:
 			m_file_stream.open(m_file_name);
 			if (m_file_stream.fail())
 				errx(EXIT_FAILURE,
-				     (std::string("error: cannot open file \"")+
+				     ("error: cannot open file \""_s+
 				      m_file_name+"\".").c_str());
 			m_result_stream = &m_file_stream;
 		} else {
@@ -1253,7 +1256,7 @@ main(int argc, char **argv)
 	argc--;
 	while (!done && argc > 0 && *argv[0] == '-') {
 		auto ilopt = [&argv]() {
-			warnx((std::string("error: unknown option ") +
+			warnx(("error: unknown option "_s +
 			       *argv + ".").c_str());
 			usage();
 		};
