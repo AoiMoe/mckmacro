@@ -1311,7 +1311,8 @@ main(int argc, char **argv)
 		FileContext::process(ctx,
 				     input.get_file_name(),
 				     input.get_stream());
-	} catch (Exit &ex) {
+	}
+	catch (Exit &ex) {
 		return ex.get_code();
 	}
 
