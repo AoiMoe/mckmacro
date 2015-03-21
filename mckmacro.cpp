@@ -678,6 +678,22 @@ public:
 	{
 		return m_auto_scope;
 	}
+	void set_error_as_fatal_mode(bool mode) noexcept
+	{
+		m_error_as_fatal = mode;
+	}
+	bool is_error_as_fatal() noexcept
+	{
+		return m_error_as_fatal;
+	}
+	void set_warning_as_error_mode(bool mode) noexcept
+	{
+		m_warning_as_error = mode;
+	}
+	bool is_warning_as_error() noexcept
+	{
+		return m_warning_as_error;
+	}
 	void incr_error_count() noexcept
 	{
 		m_error_count++;
@@ -692,6 +708,8 @@ private:
 	std::string m_output_file_name;
 	std::ostream &m_output_stream;
 	std::ostream &m_logger;
+	bool m_error_as_fatal = false;
+	bool m_warning_as_error = false;
 	bool m_auto_scope = false;
 	int m_error_count = 0;
 	int m_warn_count = 0;
@@ -1228,10 +1246,17 @@ main(int argc, char **argv)
 	FileArg<std::istream> input;
 	FileArg<std::ostream> output;
 	auto done = false;
+	auto error_as_fatal = false;
+	auto warning_as_error = false;
 
 	argv++;
 	argc--;
 	while (!done && argc > 0 && *argv[0] == '-') {
+		auto ilopt = [&argv]() {
+			warnx((std::string("error: unknown option ") +
+			       *argv + ".").c_str());
+			usage();
+		};
 		switch (argv[0][1]) {
 		case '-':
 			done = true;
@@ -1249,10 +1274,18 @@ main(int argc, char **argv)
 			argc--;
 			output.set_file_name(argv[0]);
 			break;
+		case 'W': {
+			const std::string opt = &argv[0][2];
+			if (opt == "fatal")
+				error_as_fatal = true;
+			else if (opt == "error")
+				warning_as_error = true;
+			else
+				ilopt();
+		}
+			break;
 		default:
-			warnx((std::string("error: unknown option -")+
-			       std::string(1, argv[0][1])+".").c_str());
-			usage();
+			ilopt();
 		}
 		argv++;
 		argc--;
@@ -1272,6 +1305,8 @@ main(int argc, char **argv)
 		CompileUnitContext ctx(output.get_file_name(),
 				       output.get_stream(),
 				       std::cerr);
+		ctx.set_error_as_fatal_mode(error_as_fatal);
+		ctx.set_warning_as_error_mode(warning_as_error);
 
 		FileContext::process(ctx,
 				     input.get_file_name(),
