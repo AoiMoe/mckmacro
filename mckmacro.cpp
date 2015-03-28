@@ -570,7 +570,7 @@ private:
 };
 
 //
-// include processor : processing including source files.
+// IncludeProcessor : processing including source files.
 //
 //   - keep path list in which include files are searched.
 //   - open include file with loop detection.
@@ -686,7 +686,7 @@ private:
 
 
 //
-// compile unit context : context per compile unit.
+// CompileUnitContext : context per compile unit.
 //
 // compile unit corresponding to an output file, generated from
 // a base source file and some include files if necessary.
@@ -779,7 +779,7 @@ private:
 };
 
 //
-// file context : context per source file.
+// FileContext : context per source file.
 //
 // file context is corresponding to each source file or include file.
 // the instance of this class is generated on the stack recursively
