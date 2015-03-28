@@ -961,10 +961,8 @@ skip_ws(ConstStringRegion *pr) noexcept
 //
 // get_macro_name : get macro name.
 //
-// rscoped : return boolean whether the name is scoped.
-//
 std::string
-get_macro_name(ConstStringRegion *pr, bool *rscoped = NULL)
+get_macro_name(ConstStringRegion *pr)
 {
 	auto &r = *pr;
 	const auto saved = r;
@@ -989,8 +987,7 @@ get_macro_name(ConstStringRegion *pr, bool *rscoped = NULL)
 		throw SyntaxError("ill-formed macro scope.");
 	if (!body)
 		throw SyntaxError("cannot get macro name.");
-	if (rscoped)
-		*rscoped = scoped;
+
 	return ConstStringRegion(saved, r);
 }
 
