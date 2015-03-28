@@ -49,11 +49,21 @@
 #define NONMOVABLE(name)		MOVABLENESS_(name, delete)
 #define DEFAULT_MOVABLE(name)		MOVABLENESS_(name, default)
 
+//
+// user-defined literal : "xxxx"_s -> std::string
+//
 std::string operator "" _s (const char *str, std::size_t len)
 {
 	return std::string(str, len);
 }
 
+//
+// reset_pointer(pp, v=nullptr) : release and set the pointer.
+//
+// pp     : pointer to the pointer to be reset.
+// v      : (optional) the value to be set to *pp, nullptr by default.
+// return : old value of *pp;
+//
 template <typename T_>
 typename std::enable_if<std::is_pointer<T_>::value, T_>::type
 reset_pointer(T_ *pp, T_ v = nullptr) noexcept
@@ -62,6 +72,9 @@ reset_pointer(T_ *pp, T_ v = nullptr) noexcept
 	return v;
 }
 
+//
+// Exit : exception expressing global exit.
+//
 class Exit
 {
 	int m_code;
@@ -85,6 +98,9 @@ public:
 	ExitFailure() noexcept : Exit(EXIT_FAILURE) { }
 };
 
+//
+// NameError : exception expressing name-related error.
+//
 template <typename Tag_>
 class NameError
 {
@@ -98,6 +114,9 @@ public:
 	}
 };
 
+//
+// SimpleEx : exception containing some message.
+//
 template <typename Tag_>
 class SimpleEx
 {
@@ -109,11 +128,12 @@ public:
 };
 
 struct SyntaxErrorTag { };
-struct FatalErrorTag { };
-
 using SyntaxError = SimpleEx<SyntaxErrorTag>;
+
+struct FatalErrorTag { };
 using FatalError = SimpleEx<FatalErrorTag>;
 
+// tokens
 constexpr auto DIRECTIVE_CHAR = '#';
 constexpr auto MACRO_CHAR = '\\';
 constexpr auto MACRO_DEF_CHAR = '\\';
@@ -126,6 +146,13 @@ constexpr auto SCOPE_CHAR = ':';
 constexpr auto SCOPE_AUTO_ON = '+';
 constexpr auto SCOPE_AUTO_OFF = '-';
 
+//
+// LoopDetector : generic loop detector.
+//
+// elements:
+//   Set   : set of record names to check duplication.
+//   Stack : record stack to be traced back.
+//
 template <typename Record_>
 class LoopDetector
 {
@@ -194,6 +221,9 @@ private:
 	bool m_freeze = true;
 };
 
+//
+// MacroStorage : associate memory among macro name and its contents.
+//
 class MacroStorage
 {
 public:
@@ -268,6 +298,9 @@ private:
 	Mapper m_mapper;
 };
 
+//
+// Region : region of any sequencial container.
+//
 template <class Container_, class Iter_=typename Container_::const_iterator>
 class Region
 {
@@ -362,6 +395,10 @@ private:
 };
 using ConstStringRegion = Region<const std::string>;
 
+
+//
+// MacroProcessor : keep macro definitions and expand it by request.
+//
 class MacroProcessor
 {
 public:
@@ -490,6 +527,10 @@ private:
 	std::string m_current_scope;
 };
 
+
+//
+// PathList : search path list
+//
 class PathList
 {
 public:
@@ -539,6 +580,12 @@ private:
 	List m_list;
 };
 
+//
+// include processor : processing including source files.
+//
+//   - keep path list in which include files are searched.
+//   - open include file with loop detection.
+//
 class IncludeProcessor
 {
 public:
@@ -648,6 +695,13 @@ private:
 	PathList m_path_list;
 };
 
+
+//
+// compile unit context : context per compile unit.
+//
+// compile unit corresponding to an output file, generated from
+// a base source file and some include files if necessary.
+//
 class CompileUnitContext
 {
 	NONCOPYABLE(CompileUnitContext);
@@ -735,6 +789,13 @@ private:
 	int m_warn_count = 0;
 };
 
+//
+// file context : context per source file.
+//
+// file context is corresponding to each source file or include file.
+// the instance of this class is generated on the stack recursively
+// when the source/include file is opened, and destroyed at closing.
+//
 class FileContext
 {
 public:
@@ -892,6 +953,13 @@ const std::string FileContext::s_fatal = "fatal";
 namespace
 {
 
+//
+// utility functions mainly used by FileContext class.
+//
+
+//
+// skip_ws : skip white space.
+//
 void
 skip_ws(ConstStringRegion *pr) noexcept
 {
@@ -901,6 +969,11 @@ skip_ws(ConstStringRegion *pr) noexcept
 			break;
 }
 
+//
+// get_macro_name : get macro name.
+//
+// rscoped : return boolean whether the name is scoped.
+//
 std::string
 get_macro_name(ConstStringRegion *pr, bool *rscoped = NULL)
 {
@@ -932,6 +1005,9 @@ get_macro_name(ConstStringRegion *pr, bool *rscoped = NULL)
 	return ConstStringRegion(saved, r);
 }
 
+//
+// get_scope_name : get space name.
+//
 std::string
 get_scope_name(ConstStringRegion *pr)
 {
@@ -946,6 +1022,11 @@ get_scope_name(ConstStringRegion *pr)
 	return ConstStringRegion(saved, r);
 }
 
+//
+// get_string : get string.
+//
+// quoted : return boolean whether the string is quoted by double-quotation.
+//
 std::string
 get_string(ConstStringRegion input, bool *quoted = NULL)
 {
@@ -1214,8 +1295,14 @@ FileContext::process_()
 namespace
 {
 
+//
+// f_banner : whether show the banner.
+//
 auto f_banner = true;
 
+//
+// banner : show banner once.
+//
 void
 banner()
 {
@@ -1225,6 +1312,9 @@ banner()
 	f_banner = false;
 }
 
+//
+// usage : show banner and usage.
+//
 void
 usage()
 {
@@ -1234,6 +1324,9 @@ usage()
 	exit(EXIT_FAILURE);
 }
 
+//
+// warnx : show warning message.
+//
 void
 warnx(const char *fmt)
 {
@@ -1241,6 +1334,9 @@ warnx(const char *fmt)
 	std::cerr << fmt << std::endl;
 }
 
+//
+// errx : show error message and exit.
+//
 void
 errx(int excode, const char *fmt)
 {
@@ -1269,6 +1365,12 @@ struct StreamTraits<std::ostream>
 };
 
 
+//
+// FileArg : file argument handler.
+//
+//  to open file corresponding to the file name, or reference to stdio
+//  if the argument is "-".
+//
 template <class BaseStream>
 class FileArg
 {
