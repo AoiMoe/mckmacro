@@ -175,7 +175,6 @@ public:
 	void push(std::string name, Args&&... args)
 	{
 		if (this->is_loop(name)) {
-			this->freeze();
 			throw Looped(std::move(name));
 		}
 		m_set.emplace(std::move(name));
@@ -183,7 +182,7 @@ public:
 	}
 	void pop() noexcept
 	{
-		if (m_freeze || m_stack.empty())
+		if (m_stack.empty())
 			return;
 		try {
 			m_set.erase(*m_stack.begin());
@@ -196,14 +195,6 @@ public:
 	{
 		return *m_stack.begin();
 	}
-	void freeze() noexcept
-	{
-		m_freeze = true;
-	}
-	void unfreeze() noexcept
-	{
-		m_freeze = false;
-	}
 	const Stack &get_stack() const noexcept
 	{
 		return m_stack;
@@ -212,13 +203,11 @@ public:
 	{
 		m_set.clear();
 		m_stack.clear();
-		m_freeze = false;
 	}
 private:
 	using Set = std::set<std::string>;
 	Set m_set;
 	Stack m_stack;
-	bool m_freeze = true;
 };
 
 //
