@@ -1011,21 +1011,19 @@ get_scope_name(ConstStringRegion *pr)
 //
 // get_string : get string.
 //
-// quoted : return boolean whether the string is quoted by double-quotation.
-//
-std::string
-get_string(ConstStringRegion input, bool *quoted = NULL)
+std::pair<std::string, bool>
+get_string(ConstStringRegion input)
 {
+	using ReturnType = std::pair<std::string, bool>;
 
-	if (quoted)
-		*quoted = false;
 	skip_ws(&input);
 
 	if (input.is_end())
-		return input;
+		return ReturnType{input, false};
 
 	auto begin = input, end = input;
 	char quote_char = 0;
+	bool quoted = false;
 
 	for (; !input.is_end(); ++input) {
 		if (*input == QUOTE_CHAR) {
@@ -1040,8 +1038,7 @@ get_string(ConstStringRegion input, bool *quoted = NULL)
 				quote_char = 0;
 				++input;
 				skip_ws(&input);
-				if (quoted)
-					*quoted = true;
+				quoted = true;
 				if (!input.is_end() &&
 				    *input != COMM_CHAR)
 					throw SyntaxError(
@@ -1058,7 +1055,7 @@ get_string(ConstStringRegion input, bool *quoted = NULL)
 	if (quote_char)
 		throw SyntaxError("unclosed quotation.");
 
-	return ConstStringRegion(begin, ++end);
+	return ReturnType{ConstStringRegion(begin, ++end), quoted};
 }
 
 } // namespace <anonymous>
@@ -1067,19 +1064,18 @@ bool
 FileContext::do_define_macro_(ConstStringRegion input) const
 {
 	auto additional = " "_s; // default: add one space character
-	auto quoted = false;
 
-	auto name = get_macro_name(&input);
-	auto str = get_string(input, &quoted);
-	if (str.empty() && !quoted) {
+	const auto name = get_macro_name(&input);
+	const auto str = get_string(input);
+	if (str.first.empty() && !str.second) {
 		macro_processor().define(name,
 					 m_input_file_name, m_line_number, "");
 	} else {
-		if (quoted)
+		if (str.second)
 			additional = "";
 		macro_processor().define(name,
 					 m_input_file_name, m_line_number,
-					 str + additional);
+					 str.first + additional);
 	}
 	output_stream() << std::endl;
 	return true;
@@ -1098,7 +1094,7 @@ FileContext::do_include_(ConstStringRegion input) const
 {
 	std::ifstream ifs;
 
-	auto file = get_string(input);
+	const auto file = get_string(input).first;
 	include_processor().open(ifs, file);
 
 	auto locker = include_processor().lock(file,
