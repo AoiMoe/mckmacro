@@ -686,21 +686,59 @@ private:
 
 
 //
+// CompileOptions : compile options.
+//
+
+class CompileOptions
+{
+public:
+	DEFAULT_MOVABLE(CompileOptions);
+	DEFAULT_COPYABLE(CompileOptions);
+	~CompileOptions() = default;
+	CompileOptions() = default;
+	void set_error_as_fatal(bool mode) noexcept
+	{
+		m_error_as_fatal = mode;
+	}
+	bool is_error_as_fatal() noexcept
+	{
+		return m_error_as_fatal;
+	}
+	void set_warning_as_error(bool mode) noexcept
+	{
+		m_warning_as_error = mode;
+	}
+	bool is_warning_as_error() noexcept
+	{
+		return m_warning_as_error;
+	}
+private:
+	bool m_error_as_fatal = false;
+	bool m_warning_as_error = false;
+};
+
+//
 // CompileUnitContext : context per compile unit.
 //
 // compile unit corresponding to an output file, generated from
 // a base source file and some include files if necessary.
 //
-class CompileUnitContext
+class CompileUnitContext : private CompileOptions
 {
 	NONCOPYABLE(CompileUnitContext);
 	NONMOVABLE(CompileUnitContext);
 public:
+	using CompileOptions::set_error_as_fatal;
+	using CompileOptions::is_error_as_fatal;
+	using CompileOptions::set_warning_as_error;
+	using CompileOptions::is_warning_as_error;
 	~CompileUnitContext() = default;
-	CompileUnitContext(std::string ofname,
+	CompileUnitContext(CompileOptions opts,
+			   std::string ofname,
 			   std::ostream &ofs,
 			   std::ostream &lgr) noexcept
-		: m_output_file_name(std::move(ofname)),
+		: CompileOptions(std::move(opts)),
+		  m_output_file_name(std::move(ofname)),
 		  m_output_stream(ofs),
 		  m_logger(lgr)
 	{
@@ -733,22 +771,6 @@ public:
 	{
 		return m_auto_scope;
 	}
-	void set_error_as_fatal_mode(bool mode) noexcept
-	{
-		m_error_as_fatal = mode;
-	}
-	bool is_error_as_fatal() noexcept
-	{
-		return m_error_as_fatal;
-	}
-	void set_warning_as_error_mode(bool mode) noexcept
-	{
-		m_warning_as_error = mode;
-	}
-	bool is_warning_as_error() noexcept
-	{
-		return m_warning_as_error;
-	}
 	int get_error_count() noexcept
 	{
 		return m_error_count;
@@ -771,8 +793,6 @@ private:
 	std::string m_output_file_name;
 	std::ostream &m_output_stream;
 	std::ostream &m_logger;
-	bool m_error_as_fatal = false;
-	bool m_warning_as_error = false;
 	bool m_auto_scope = false;
 	int m_error_count = 0;
 	int m_warn_count = 0;
@@ -1406,8 +1426,7 @@ main(int argc, char **argv)
 	FileArg<std::istream> input;
 	FileArg<std::ostream> output;
 	auto done = false;
-	auto error_as_fatal = false;
-	auto warning_as_error = false;
+	CompileOptions opts;
 	int ret = EXIT_SUCCESS;
 
 	argv++;
@@ -1438,9 +1457,9 @@ main(int argc, char **argv)
 		case 'W': {
 			const std::string opt = &argv[0][2];
 			if (opt == "fatal")
-				error_as_fatal = true;
+				opts.set_error_as_fatal(true);
 			else if (opt == "error")
-				warning_as_error = true;
+				opts.set_warning_as_error(true);
 			else
 				ilopt();
 		}
@@ -1469,12 +1488,10 @@ main(int argc, char **argv)
 			throw ExitFailure();
 		}
 
-		CompileUnitContext ctx(output.get_file_name(),
+		CompileUnitContext ctx(opts,
+				       output.get_file_name(),
 				       output.get_stream(),
 				       std::cerr);
-
-		ctx.set_error_as_fatal_mode(error_as_fatal);
-		ctx.set_warning_as_error_mode(warning_as_error);
 
 		FileContext::process(ctx,
 				     input.get_file_name(),
