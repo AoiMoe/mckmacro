@@ -1,10 +1,13 @@
 MCK 用マクロプロセッサ MCKMACRO
 
 ●コマンドライン
-  mckmacro [-q] [-o outfile] [infile]
+  mckmacro [-o outfile] [その他のオプション] [infile]
 
-  -q          著作権表示の表示を抑止します。
   -o outfile  出力ファイル名を指定します。省略された場合は標準出力です。
+  -q          著作権表示の表示を抑止します。
+  -Wfatal     エラーが発生したらすぐに停止します。
+  -Werror     警告発生時時にも終了コードとしてEXIT_FAILUREを返します。
+  -Xline      Cプリプロセッサ風の#lineディレクティブを埋め込みます。
   infile      入力ファイル名を指定します。省略された場合は標準入力です。
 
 ●マクロの基礎
