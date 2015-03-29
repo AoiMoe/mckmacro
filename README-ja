@@ -228,7 +228,7 @@ MCK 用マクロプロセッサ MCKMACRO
   使用条件は二条項 BSD ライセンスですので、次の著作権表示を配布物の一部に
   含めれば、バイナリもソースも商用非商用限らず自由に再利用可能です:
 
-   Copyright (c)2006 Takuya SHIOZAKI,
+   Copyright (c)2006-2015 Takuya SHIOZAKI,
    All rights reserved.
 
    Redistribution and use in source and binary forms, with or without
