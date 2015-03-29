@@ -868,8 +868,8 @@ public:
 	void put_message(const std::string &fac, const std::string &msg,
 			 MessageHookVar additional = noneMessageHook_) const
 	{
-		logger() << fac << " at line " << m_line_number << " in "
-			 << m_input_file_name << ": " << msg << std::endl;
+		logger() << m_input_file_name << ':' << m_line_number
+			 << ": " << fac << ": " << msg << std::endl;
 		additional(logger());
 	}
 	void error(const std::string &msg,
