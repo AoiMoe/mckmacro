@@ -263,13 +263,23 @@ public:
 		if (i != m_mapper.end())
 			m_mapper.erase(i);
 	}
-	void define(std::string name, std::string file, int line,
+	bool define(std::string name, std::string file, int line,
 		    std::string contents)
 	{
-		m_mapper.emplace(std::move(name),
-				 Record(std::move(file),
-					std::move(line),
-					std::move(contents)));
+		auto i = m_mapper.find(name);
+
+		if (i == m_mapper.end()) {
+			m_mapper.emplace(std::move(name),
+					 Record(std::move(file),
+						std::move(line),
+						std::move(contents)));
+			return false;
+		} else {
+			i->second = Record(std::move(file),
+					   std::move(line),
+					   std::move(contents));
+			return true;
+		}
 	}
 	void clear() noexcept
 	{
@@ -446,13 +456,13 @@ public:
 	{
 		m_storage.undef(make_scoped_(std::move(name)));
 	}
-	void define(std::string name, std::string file, int line,
+	bool define(std::string name, std::string file, int line,
 		    std::string contents)
 	{
-		m_storage.define(make_scoped_(std::move(name)),
-				 std::move(file),
-				 line,
-				 std::move(contents));
+		return m_storage.define(make_scoped_(std::move(name)),
+					std::move(file),
+					line,
+					std::move(contents));
 	}
 	void clear() noexcept
 	{
@@ -720,10 +730,19 @@ public:
 	{
 		return m_use_line_directive;
 	}
+	void set_warn_redefined(bool mode) noexcept
+	{
+		m_warn_redefined = mode;
+	}
+	bool is_warn_redefined() noexcept
+	{
+		return m_warn_redefined;
+	}
 private:
 	bool m_error_as_fatal = false;
 	bool m_warning_as_error = false;
 	bool m_use_line_directive = false;
+	bool m_warn_redefined = false;
 };
 
 //
@@ -743,6 +762,8 @@ public:
 	using CompileOptions::is_warning_as_error;
 	using CompileOptions::set_use_line_directive;
 	using CompileOptions::is_use_line_directive;
+	using CompileOptions::set_warn_redefined;
+	using CompileOptions::is_warn_redefined;
 	~CompileUnitContext() = default;
 	CompileUnitContext(CompileOptions opts,
 			   std::string ofname,
@@ -1098,17 +1119,23 @@ FileContext::do_define_macro_(ConstStringRegion input) const
 
 	const auto name = get_macro_name(&input);
 	const auto str = get_string(input);
+	auto redefined = false;
+
 	if (str.first.empty() && !str.second) {
-		macro_processor().define(name,
-					 m_input_file_name, m_line_number, "");
+		redefined = macro_processor().define(name,
+						     m_input_file_name,
+						     m_line_number, "");
 	} else {
 		if (str.second)
 			additional = "";
-		macro_processor().define(name,
-					 m_input_file_name, m_line_number,
-					 str.first + additional);
+		redefined = macro_processor().define(name,
+						     m_input_file_name,
+						     m_line_number,
+						     str.first + additional);
 	}
 	output_stream() << std::endl;
+	if (m_compile_unit_context.is_warn_redefined() && redefined)
+		warning("macro " + name + " is redefined.");
 	return true;
 }
 
@@ -1345,11 +1372,12 @@ usage()
 	    << "usage: mckmacro [-o outfile] [other options] [infile]" << endl
 	    << endl
 	    << "options:" << endl
-	    << "  -o outfile : specify output file instead of stdout." << endl
-	    << "  -q         : quiet. " << endl
-	    << "  -Wfatal    : stop compile immediately on an error." << endl
-	    << "  -Werror    : make compile fail on warnings." << endl
-	    << "  -Xline     : use #line directive." << endl
+	    << "  -o outfile  : specify output file instead of stdout." << endl
+	    << "  -q          : quiet. " << endl
+	    << "  -Wfatal     : stop compile immediately on an error." << endl
+	    << "  -Werror     : make compile fail on warnings." << endl
+	    << "  -Wredefined : warn if macro is redefined." << endl
+	    << "  -Xline      : use #line directive." << endl
 	    << endl;
 
 	exit(EXIT_FAILURE);
@@ -1489,6 +1517,8 @@ main(int argc, char **argv)
 				opts.set_error_as_fatal(true);
 			else if (opt == "error")
 				opts.set_warning_as_error(true);
+			else if (opt == "redefined")
+				opts.set_warn_redefined(true);
 			else
 				ilopt();
 		}
