@@ -712,9 +712,18 @@ public:
 	{
 		return m_warning_as_error;
 	}
+	void set_use_line_directive(bool mode) noexcept
+	{
+		m_use_line_directive = mode;
+	}
+	bool is_use_line_directive() noexcept
+	{
+		return m_use_line_directive;
+	}
 private:
 	bool m_error_as_fatal = false;
 	bool m_warning_as_error = false;
+	bool m_use_line_directive = false;
 };
 
 //
@@ -732,6 +741,8 @@ public:
 	using CompileOptions::is_error_as_fatal;
 	using CompileOptions::set_warning_as_error;
 	using CompileOptions::is_warning_as_error;
+	using CompileOptions::set_use_line_directive;
+	using CompileOptions::is_use_line_directive;
 	~CompileUnitContext() = default;
 	CompileUnitContext(CompileOptions opts,
 			   std::string ofname,
@@ -1271,6 +1282,9 @@ void
 FileContext::process_()
 {
 	try {
+		if (m_compile_unit_context.is_use_line_directive())
+			output_stream()
+			    << "#line 1 " << m_input_file_name << std::endl;
 		while (m_input_stream.good()) {
 			std::string input;
 
@@ -1463,6 +1477,14 @@ main(int argc, char **argv)
 				opts.set_error_as_fatal(true);
 			else if (opt == "error")
 				opts.set_warning_as_error(true);
+			else
+				ilopt();
+		}
+			break;
+		case 'X': {
+			const std::string opt = &argv[0][2];
+			if (opt == "line")
+				opts.set_use_line_directive(true);
 			else
 				ilopt();
 		}
