@@ -1337,9 +1337,21 @@ banner()
 void
 usage()
 {
+	using std::endl;
+
 	banner();
-	std::cerr << "usage: mckmacro [-q] [-o outfile] [infile]"
-		  << std::endl;
+
+	std::cerr
+	    << "usage: mckmacro [-o outfile] [other options] [infile]" << endl
+	    << endl
+	    << "options:" << endl
+	    << "  -o outfile : specify output file instead of stdout." << endl
+	    << "  -q         : quiet. " << endl
+	    << "  -Wfatal    : stop compile immediately on an error." << endl
+	    << "  -Werror    : make compile fail on warnings." << endl
+	    << "  -Xline     : use #line directive." << endl
+	    << endl;
+
 	exit(EXIT_FAILURE);
 }
 
