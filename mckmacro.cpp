@@ -932,7 +932,8 @@ private:
 				auto &rec = m.query(mname);
 				os << "\t" << MACRO_CHAR << mname
 				   << " defined at line " << rec.get_line()
-				   << " in " << rec.get_file() << std::endl;
+				   << " in \"" << rec.get_file() << '\"'
+				   << std::endl;
 			}
 		}
 		catch (...) {
