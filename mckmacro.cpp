@@ -1199,6 +1199,9 @@ FileContext::expand_(ConstStringRegion input) const
 	auto begin = input;
 	auto saved = input;
 	while (!input.is_end()) {
+		//
+		// XXX: assumes ShiftJIS / CP932.
+		//
 		if (dbcs) {
 			dbcs = false;
 			goto next;
