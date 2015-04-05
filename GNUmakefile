@@ -10,6 +10,10 @@ LDFLAGS=$(DBG)
 SRCS=mckmacro.cpp
 OBJS=$(SRCS:.cpp=.o)
 PROG=mckmacro$(SFX)
+EXPORT=mckmacro
+VERSION=20150405.00
+EXPORTDIR= $(EXPORT)-$(VERSION)
+EXPORTFILES= $(PROG) $(SRCS) GNUmakefile README-ja
 
 all: $(PROG)
 
@@ -23,3 +27,8 @@ $(PROG): $(OBJS)
 
 clean:
 	-rm -f $(OBJS) $(PROG)
+
+export: $(PROG)
+	-rm -rf $(EXPORTDIR)
+	mkdir $(EXPORTDIR)
+	for i in $(EXPORTFILES); do cp $$i $(EXPORTDIR)/; done
