@@ -1501,22 +1501,35 @@ main(int argc, char **argv)
 			       *argv + ".").c_str());
 			usage();
 		};
+		auto check_term = [&argv,ilopt]() {
+			// make sure to be terminated.
+			if (argv[0][2])
+				ilopt();
+		};
 		switch (argv[0][1]) {
 		case '-':
+			check_term();
 			done = true;
 			break;
 		case 'q':
+			check_term();
 			f_banner = false;
 			break;
 		case 'o':
-			if (argc < 2)
-				usage();
 			if (output.is_set())
 				errx(EXIT_FAILURE,
 				     "error: duplicate -o option.");
-			argv++;
-			argc--;
-			output.set_file_name(argv[0]);
+			if (!argv[0][2]) {
+				// "-o filename" form.
+				if (argc < 2)
+					usage();
+				argv++;
+				argc--;
+				output.set_file_name(argv[0]);
+			} else {
+				// "-ofilename" form.
+				output.set_file_name(&argv[0][2]);
+			}
 			break;
 		case 'W': {
 			const std::string opt = &argv[0][2];
