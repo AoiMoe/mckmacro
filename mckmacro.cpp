@@ -1414,21 +1414,19 @@ errx(int excode, const char *fmt)
 
 } // namespace <anonymous>
 
-template <class BaseStream> struct StreamTraits;
-
-template <>
-struct StreamTraits<std::istream>
+struct InputStreamTraits
 {
 	static constexpr const char *stdio_name = "<stdin>";
 	static constexpr std::istream &stdio_stream = std::cin;
+	using BaseStream = std::istream;
 	using FileStream = std::ifstream;
 };
 
-template <>
-struct StreamTraits<std::ostream>
+struct OutputStreamTraits
 {
 	static constexpr const char *stdio_name = "<stdout>";
 	static constexpr std::ostream &stdio_stream = std::cout;
+	using BaseStream = std::ostream;
 	using FileStream = std::ofstream;
 };
 
@@ -1439,12 +1437,12 @@ struct StreamTraits<std::ostream>
 //  to open file corresponding to the file name, or reference to stdio
 //  if the argument is "-".
 //
-template <class BaseStream>
+template <class StreamTraits>
 class FileArg
 {
 	NONCOPYABLE(FileArg);
 private:
-	using StreamTraits = struct StreamTraits<BaseStream>;
+	using BaseStream = typename StreamTraits::BaseStream;
 	using FileStream = typename StreamTraits::FileStream;
 public:
 	FileArg() = default;
@@ -1489,8 +1487,8 @@ private:
 int
 main(int argc, char **argv)
 {
-	FileArg<std::istream> input;
-	FileArg<std::ostream> output;
+	FileArg<InputStreamTraits> input;
+	FileArg<OutputStreamTraits> output;
 	auto done = false;
 	CompileOptions opts;
 	int ret = EXIT_SUCCESS;
