@@ -252,3 +252,11 @@ MCK 用マクロプロセッサ MCKMACRO
    LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
    OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
    SUCH DAMAGE.
+
+●変更履歴
+  version 20150405.00
+    - バージョン番号のスキームを変えた。
+    - ビルド環境をMinGWに変えた。
+    - C++11前提にした。
+    - -Wfatal, -Werror, -Wredefined, -Xline を追加した。
+    - エラーが出ても停止せずにひとまず最後まで処理を続行するようにした。
