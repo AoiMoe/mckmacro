@@ -916,7 +916,7 @@ private:
 	bool do_include_(ConstStringRegion);
 	bool do_set_scope_(ConstStringRegion);
 	static bool skip_macro_directive_chars_(ConstStringRegion *) noexcept;
-	bool directive_(ConstStringRegion);
+	bool process_directive_(ConstStringRegion);
 	static DirectiveHandler search_directive_handler_(char ch)
 	{
 		auto i = s_directive_pair.find(ch);
@@ -1194,7 +1194,7 @@ FileContext::skip_macro_directive_chars_(ConstStringRegion *input) noexcept
 }
 
 bool
-FileContext::directive_(ConstStringRegion input)
+FileContext::process_directive_(ConstStringRegion input)
 {
 	const auto recover = input;
 	try {
@@ -1326,7 +1326,7 @@ FileContext::process_()
 				    << m_input_file_name << std::endl;
 			m_need_line_directive_to_reset = false;
 
-			if (!this->directive_(input)) {
+			if (!this->process_directive_(input)) {
 				if (m_compile_unit_context.is_auto_scope() &&
 				    input.size() > 0 &&
 				    isalpha((int)(unsigned char)input[0])) {
