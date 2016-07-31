@@ -738,11 +738,20 @@ public:
 	{
 		return m_warn_redefined;
 	}
+	void set_use_track_expansion(bool mode) noexcept
+	{
+		m_use_track_expansion = mode;
+	}
+	bool is_use_track_expansion() noexcept
+	{
+		return m_use_track_expansion;
+	}
 private:
 	bool m_error_as_fatal = false;
 	bool m_warning_as_error = false;
 	bool m_use_line_directive = false;
 	bool m_warn_redefined = false;
+	bool m_use_track_expansion = false;
 };
 
 //
@@ -1393,6 +1402,7 @@ usage()
 	    << "  -Werror     : make compile fail on warnings." << endl
 	    << "  -Wredefined : warn if macro is redefined." << endl
 	    << "  -Xline      : use #line directive." << endl
+	    << "  -Xtrexpand  : enable track expansion." << endl
 	    << endl;
 
 	exit(EXIT_FAILURE);
@@ -1553,6 +1563,8 @@ main(int argc, char **argv)
 			const std::string opt = &argv[0][2];
 			if (opt == "line")
 				opts.set_use_line_directive(true);
+			else if (opt == "trexpand")
+				opts.set_use_track_expansion(true);
 			else
 				ilopt();
 		}
