@@ -917,6 +917,7 @@ private:
 	bool do_set_scope_(ConstStringRegion);
 	static bool skip_macro_directive_chars_(ConstStringRegion *) noexcept;
 	bool process_directive_(ConstStringRegion);
+	void process_expand_(ConstStringRegion, bool =true);
 	static DirectiveHandler search_directive_handler_(char ch)
 	{
 		auto i = s_directive_pair.find(ch);
@@ -1310,6 +1311,18 @@ next:
 }
 
 void
+FileContext::process_expand_(ConstStringRegion input,
+			     [[gnu::unused]] bool recurse)
+{
+	if (m_compile_unit_context.is_auto_scope() &&
+	    input.length() > 0 &&
+	    isalpha((int)(unsigned char)*input)) {
+		macro_processor().set_scope(std::string(1, *input));
+	}
+	output_stream() << this->expand_(input) << std::endl;
+}
+
+void
 FileContext::process_()
 {
 	try {
@@ -1326,16 +1339,9 @@ FileContext::process_()
 				    << m_input_file_name << std::endl;
 			m_need_line_directive_to_reset = false;
 
-			if (!this->process_directive_(input)) {
-				if (m_compile_unit_context.is_auto_scope() &&
-				    input.size() > 0 &&
-				    isalpha((int)(unsigned char)input[0])) {
-					macro_processor().set_scope(
-						std::string(1, input[0]));
-				}
-				output_stream() << this->expand_(input)
-						<< std::endl;
-			}
+			if (!this->process_directive_(input))
+				this->process_expand_(input);
+
 			if (output_stream().bad())
 				throw FatalError("cannot write to file \"" +
 						 get_output_file_name() + "\"");
