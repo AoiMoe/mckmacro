@@ -6,7 +6,7 @@ MCK 用マクロプロセッサ MCKMACRO
   -o outfile     出力ファイル名を指定します。省略された場合は標準出力です。
   -q             著作権表示の表示を抑止します。
   -Wfatal        エラーが発生したらすぐに停止します。
-  -Werror        警告発生時時にも終了コードとしてEXIT_FAILUREを返します。
+  -Werror        警告発生時にも終了コードとしてEXIT_FAILUREを返します。
   -Wredefined    マクロの再定義を警告します。
   -Xline         Cプリプロセッサ風の#lineディレクティブを埋め込みます。
   -Xtrack-expand トラック展開を有効にします。
