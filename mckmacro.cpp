@@ -1,5 +1,5 @@
 /*-
- * Copyright (c)2006-2015 Takuya SHIOZAKI,
+ * Copyright (c)2006-2016 Takuya SHIOZAKI,
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1441,7 +1441,7 @@ void
 banner()
 {
 	if (f_banner)
-		std::cerr << "macro for mck (c)2006-2015 T.SHIOZAKI."
+		std::cerr << "macro for mck (c)2006-2016 T.SHIOZAKI."
 			  << std::endl;
 	f_banner = false;
 }
