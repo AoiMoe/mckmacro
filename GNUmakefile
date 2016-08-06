@@ -13,9 +13,12 @@ PROG=mckmacro$(SFX)
 EXPORT=mckmacro
 VERSION=20160807_00
 EXPORTDIR= $(EXPORT)-$(VERSION)
+EXPORTZIP= $(EXPORT)-$(VERSION).zip
 EXPORTFILES= $(PROG) $(SRCS) GNUmakefile README-ja
 
 all: $(PROG)
+
+.PHONY: export export-zip export-clean
 
 .cpp.o:
 	$(CXX) $(CDEFS) -c $<
@@ -26,9 +29,17 @@ $(PROG): $(OBJS)
 	$(CXX) -static $(LDFLAGS) -o $@ $<
 
 clean:
-	-rm -f $(OBJS) $(PROG)
+	rm -f $(OBJS) $(PROG)
 
 export: $(PROG)
-	-rm -rf $(EXPORTDIR)
+	rm -rf $(EXPORTDIR)
 	mkdir $(EXPORTDIR)
 	for i in $(EXPORTFILES); do cp $$i $(EXPORTDIR)/; done
+
+export-zip: export
+	rm -f $(EXPORTZIP)
+	zip -r $(EXPORTZIP) $(EXPORTDIR)
+
+export-clean:
+	rm -rf $(EXPORTDIR)
+	rm -f $(EXPORTZIP)
