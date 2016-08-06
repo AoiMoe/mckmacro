@@ -303,6 +303,10 @@ MCK 用マクロプロセッサ MCKMACRO
    SUCH DAMAGE.
 
 ●変更履歴
+  version 20160807.00
+    - -Xtrack-expand, -Xauto-scope を追加した。
+    - #+opt, #-opt ディレクティブを追加した。
+
   version 20150405.00
     - バージョン番号のスキームを変えた。
     - ビルド環境をMinGWに変えた。
