@@ -728,6 +728,14 @@ public:
 	{
 		return m_warning_as_error;
 	}
+	void set_warn_redefined(bool mode) noexcept
+	{
+		m_warn_redefined = mode;
+	}
+	bool is_warn_redefined() noexcept
+	{
+		return m_warn_redefined;
+	}
 	void set_use_line_directive(bool mode) noexcept
 	{
 		m_use_line_directive = mode;
@@ -744,20 +752,21 @@ public:
 	{
 		return m_use_track_expansion;
 	}
-	void set_warn_redefined(bool mode) noexcept
+	void set_auto_scope(bool mode) noexcept
 	{
-		m_warn_redefined = mode;
+		m_auto_scope = mode;
 	}
-	bool is_warn_redefined() noexcept
+	bool is_auto_scope() const noexcept
 	{
-		return m_warn_redefined;
+		return m_auto_scope;
 	}
 private:
 	bool m_error_as_fatal = false;
 	bool m_warning_as_error = false;
+	bool m_warn_redefined = false;
 	bool m_use_line_directive = false;
 	bool m_use_track_expansion = false;
-	bool m_warn_redefined = false;
+	bool m_auto_scope = false;
 };
 
 //
@@ -775,12 +784,14 @@ public:
 	using CompileOptions::is_error_as_fatal;
 	using CompileOptions::set_warning_as_error;
 	using CompileOptions::is_warning_as_error;
+	using CompileOptions::set_warn_redefined;
+	using CompileOptions::is_warn_redefined;
 	using CompileOptions::set_use_line_directive;
 	using CompileOptions::is_use_line_directive;
 	using CompileOptions::set_use_track_expansion;
 	using CompileOptions::is_use_track_expansion;
-	using CompileOptions::set_warn_redefined;
-	using CompileOptions::is_warn_redefined;
+	using CompileOptions::set_auto_scope;
+	using CompileOptions::is_auto_scope;
 	~CompileUnitContext() = default;
 	CompileUnitContext(CompileOptions opts,
 			   std::string ofname,
@@ -812,14 +823,6 @@ public:
 	{
 		return m_output_stream;
 	}
-	void set_auto_scope_mode(bool mode) noexcept
-	{
-		m_auto_scope = mode;
-	}
-	bool is_auto_scope() const noexcept
-	{
-		return m_auto_scope;
-	}
 	int get_error_count() noexcept
 	{
 		return m_error_count;
@@ -842,7 +845,6 @@ private:
 	std::string m_output_file_name;
 	std::ostream &m_output_stream;
 	std::ostream &m_logger;
-	bool m_auto_scope = false;
 	int m_error_count = 0;
 	int m_warn_count = 0;
 };
@@ -1203,10 +1205,10 @@ FileContext::do_set_scope_(ConstStringRegion input)
 	if (!input.is_end()) {
 		switch (*input) {
 		case SCOPE_AUTO_ON:
-			m_compile_unit_context.set_auto_scope_mode(true);
+			m_compile_unit_context.set_auto_scope(true);
 			return true;
 		case SCOPE_AUTO_OFF:
-			m_compile_unit_context.set_auto_scope_mode(false);
+			m_compile_unit_context.set_auto_scope(false);
 			return true;
 		}
 	}
@@ -1227,6 +1229,8 @@ FileContext::do_opt_(ConstStringRegion input, bool ison)
 			put_line_directive();
 	} else if (optname == "track-expand") {
 		m_compile_unit_context.set_use_track_expansion(ison);
+	} else if (optname == "auto-scope") {
+		m_compile_unit_context.set_auto_scope(ison);
 	} else {
 		warning("unknown option: "+optname);
 		return false;
@@ -1623,6 +1627,8 @@ main(int argc, char **argv)
 				opts.set_use_line_directive(true);
 			else if (opt == "track-expand")
 				opts.set_use_track_expansion(true);
+			else if (opt == "auto-scope")
+				opts.set_auto_scope(true);
 			else
 				ilopt();
 		}
