@@ -452,6 +452,10 @@ public:
 	{
 		m_current_scope = std::move(s);
 	}
+	void set_scope(char ch)
+	{
+		set_scope(std::string(1, ch));
+	}
 	void undef(std::string name)
 	{
 		m_storage.undef(make_scoped_(std::move(name)));
@@ -730,14 +734,6 @@ public:
 	{
 		return m_use_line_directive;
 	}
-	void set_warn_redefined(bool mode) noexcept
-	{
-		m_warn_redefined = mode;
-	}
-	bool is_warn_redefined() noexcept
-	{
-		return m_warn_redefined;
-	}
 	void set_use_track_expansion(bool mode) noexcept
 	{
 		m_use_track_expansion = mode;
@@ -746,12 +742,20 @@ public:
 	{
 		return m_use_track_expansion;
 	}
+	void set_warn_redefined(bool mode) noexcept
+	{
+		m_warn_redefined = mode;
+	}
+	bool is_warn_redefined() noexcept
+	{
+		return m_warn_redefined;
+	}
 private:
 	bool m_error_as_fatal = false;
 	bool m_warning_as_error = false;
 	bool m_use_line_directive = false;
-	bool m_warn_redefined = false;
 	bool m_use_track_expansion = false;
+	bool m_warn_redefined = false;
 };
 
 //
@@ -771,6 +775,8 @@ public:
 	using CompileOptions::is_warning_as_error;
 	using CompileOptions::set_use_line_directive;
 	using CompileOptions::is_use_line_directive;
+	using CompileOptions::set_use_track_expansion;
+	using CompileOptions::is_use_track_expansion;
 	using CompileOptions::set_warn_redefined;
 	using CompileOptions::is_warn_redefined;
 	~CompileUnitContext() = default;
@@ -926,7 +932,7 @@ private:
 	bool do_set_scope_(ConstStringRegion);
 	static bool skip_macro_directive_chars_(ConstStringRegion *) noexcept;
 	bool process_directive_(ConstStringRegion);
-	void process_expand_(ConstStringRegion, bool =true);
+	void process_expand_(ConstStringRegion);
 	static DirectiveHandler search_directive_handler_(char ch)
 	{
 		auto i = s_directive_pair.find(ch);
@@ -976,6 +982,12 @@ private:
 		}
 		catch (...) {
 		}
+	}
+	void put_line_directive() const
+	{
+		if (m_compile_unit_context.is_use_line_directive())
+			output_stream() << "#line " << m_line_number << ' '
+					<< m_input_file_name << std::endl;
 	}
 	std::string expand_(ConstStringRegion) const;
 	void process_();
@@ -1320,13 +1332,36 @@ next:
 }
 
 void
-FileContext::process_expand_(ConstStringRegion input,
-			     [[gnu::unused]] bool recurse)
+FileContext::process_expand_(ConstStringRegion input)
 {
-	if (m_compile_unit_context.is_auto_scope() &&
-	    input.length() > 0 &&
-	    isalpha((int)(unsigned char)*input)) {
-		macro_processor().set_scope(std::string(1, *input));
+	if (m_compile_unit_context.is_use_track_expansion()) {
+		// get track characters for track expansion.
+		ConstStringRegion remain{input};
+		while (remain.length() > 0 &&
+		       isalpha((int)(unsigned char)*remain))
+		     ++remain;
+		ConstStringRegion track{input, remain};
+		if (track.length() > 0) {
+			// there is at least one track character.
+			bool needlinedir = false;
+			for (; track.length() > 0; ++track) {
+				if (needlinedir)
+					put_line_directive();
+				if (m_compile_unit_context.is_auto_scope())
+					macro_processor().set_scope(*track);
+				output_stream() << *track
+						<< this->expand_(remain)
+						<< std::endl;
+				needlinedir = true;
+			}
+			return;
+		}
+		// there is no track character.  put input as is below.
+	} else if (m_compile_unit_context.is_auto_scope() &&
+		   input.length() > 0 &&
+		   isalpha((int)(unsigned char)*input)) {
+		// auto scope
+		macro_processor().set_scope(*input);
 	}
 	output_stream() << this->expand_(input) << std::endl;
 }
@@ -1341,12 +1376,10 @@ FileContext::process_()
 			getline(m_input_stream, input);
 			m_line_number++;
 
-			if (m_compile_unit_context.is_use_line_directive() &&
-			    m_need_line_directive_to_reset)
-				output_stream()
-				    << "#line " << m_line_number << ' '
-				    << m_input_file_name << std::endl;
-			m_need_line_directive_to_reset = false;
+			if (m_need_line_directive_to_reset) {
+				this->put_line_directive();
+				m_need_line_directive_to_reset = false;
+			}
 
 			if (!this->process_directive_(input))
 				this->process_expand_(input);
@@ -1388,22 +1421,20 @@ banner()
 void
 usage()
 {
-	using std::endl;
-
 	banner();
 
 	std::cerr
-	    << "usage: mckmacro [-o outfile] [other options] [infile]" << endl
-	    << endl
-	    << "options:" << endl
-	    << "  -o outfile  : specify output file instead of stdout." << endl
-	    << "  -q          : quiet. " << endl
-	    << "  -Wfatal     : stop compile immediately on an error." << endl
-	    << "  -Werror     : make compile fail on warnings." << endl
-	    << "  -Wredefined : warn if macro is redefined." << endl
-	    << "  -Xline      : use #line directive." << endl
-	    << "  -Xtrexpand  : enable track expansion." << endl
-	    << endl;
+	    << "usage: mckmacro [-o outfile] [other options] [infile]\n"
+	    << std::endl
+	    << "options:\n"
+	    << "  -o outfile     : specify output file instead of stdout.\n"
+	    << "  -q             : quiet. \n"
+	    << "  -Wfatal        : stop compile immediately on an error.\n"
+	    << "  -Werror        : make compile fail on warnings.\n"
+	    << "  -Wredefined    : warn if macro is redefined.\n"
+	    << "  -Xline         : use #line directive.\n"
+	    << "  -Xtrack-expand : enable track expansion.\n"
+	    << std::endl;
 
 	exit(EXIT_FAILURE);
 }
@@ -1563,7 +1594,7 @@ main(int argc, char **argv)
 			const std::string opt = &argv[0][2];
 			if (opt == "line")
 				opts.set_use_line_directive(true);
-			else if (opt == "trexpand")
+			else if (opt == "track-expand")
 				opts.set_use_track_expansion(true);
 			else
 				ilopt();
