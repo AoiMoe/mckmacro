@@ -145,6 +145,8 @@ constexpr auto PATH_SEP = '\\';
 constexpr auto SCOPE_CHAR = ':';
 constexpr auto SCOPE_AUTO_ON = '+';
 constexpr auto SCOPE_AUTO_OFF = '-';
+constexpr auto OPT_ON_CHAR = '+';
+constexpr auto OPT_OFF_CHAR = '-';
 
 //
 // LoopDetector : generic loop detector.
@@ -930,6 +932,9 @@ private:
 	bool do_undef_macro_(ConstStringRegion);
 	bool do_include_(ConstStringRegion);
 	bool do_set_scope_(ConstStringRegion);
+	bool do_opt_(ConstStringRegion, bool);
+	bool do_opt_on_(ConstStringRegion r) { return do_opt_(r, true); }
+	bool do_opt_off_(ConstStringRegion r) { return do_opt_(r, false); }
 	static bool skip_macro_directive_chars_(ConstStringRegion *) noexcept;
 	bool process_directive_(ConstStringRegion);
 	void process_expand_(ConstStringRegion);
@@ -1008,7 +1013,9 @@ const FileContext::DirectiveMap FileContext::s_directive_pair = {
 	{ MACRO_DEF_CHAR, &FileContext::do_define_macro_ },
 	{ MACRO_UNDEF_CHAR, &FileContext::do_undef_macro_ },
 	{ SCOPE_CHAR, &FileContext::do_set_scope_ },
-	{ INCLUDE_CHAR, &FileContext::do_include_ }
+	{ INCLUDE_CHAR, &FileContext::do_include_ },
+	{ OPT_ON_CHAR, &FileContext::do_opt_on_ },
+	{ OPT_OFF_CHAR, &FileContext::do_opt_off_ }
 };
 
 const std::string FileContext::s_error = "error";
@@ -1204,6 +1211,26 @@ FileContext::do_set_scope_(ConstStringRegion input)
 		}
 	}
 	macro_processor().set_scope(get_scope_name(&input));
+	output_stream() << std::endl;
+	return true;
+}
+
+bool
+FileContext::do_opt_(ConstStringRegion input, bool ison)
+{
+	std::string optname = input;
+
+	if (optname == "line") {
+		bool old = m_compile_unit_context.is_use_line_directive();
+		m_compile_unit_context.set_use_line_directive(ison);
+		if (!old && ison)
+			put_line_directive();
+	} else if (optname == "track-expand") {
+		m_compile_unit_context.set_use_track_expansion(ison);
+	} else {
+		warning("unknown option: "+optname);
+		return false;
+	}
 	output_stream() << std::endl;
 	return true;
 }
