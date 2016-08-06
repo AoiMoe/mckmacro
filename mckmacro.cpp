@@ -107,7 +107,7 @@ class NameError
 	std::string m_name;
 public:
 	~NameError() = default;
-	NameError(std::string name) noexcept : m_name(std::move(name)) { }
+	NameError(std::string name) noexcept : m_name(name) { }
 	const std::string &get_name() const noexcept
 	{
 		return m_name;
@@ -122,7 +122,7 @@ class SimpleEx
 {
 	std::string m_message;
 public:
-	SimpleEx(std::string str) noexcept : m_message(std::move(str)) { }
+	SimpleEx(std::string str) noexcept : m_message(str) { }
 	~SimpleEx() = default;
 	const std::string &what() const noexcept { return m_message; }
 };
@@ -177,9 +177,9 @@ public:
 	void push(std::string name, Args&&... args)
 	{
 		if (this->is_loop(name)) {
-			throw Looped(std::move(name));
+			throw Looped(name);
 		}
-		m_set.emplace(std::move(name));
+		m_set.emplace(name);
 		m_stack.emplace_front(std::forward<Args>(args)...);
 	}
 	void pop() noexcept
@@ -234,9 +234,7 @@ public:
 		Record(std::string file,
 		       int line,
 		       std::string contents) noexcept
-			: m_file(std::move(file)),
-			  m_line(line),
-			  m_contents(std::move(contents))
+			: m_file(file), m_line(line), m_contents(contents)
 		{
 		}
 		const std::string &get_file() const noexcept
@@ -271,15 +269,10 @@ public:
 		auto i = m_mapper.find(name);
 
 		if (i == m_mapper.end()) {
-			m_mapper.emplace(std::move(name),
-					 Record(std::move(file),
-						std::move(line),
-						std::move(contents)));
+			m_mapper.emplace(name, Record(file, line, contents));
 			return false;
 		} else {
-			i->second = Record(std::move(file),
-					   std::move(line),
-					   std::move(contents));
+			i->second = Record(file, line, contents);
 			return true;
 		}
 	}
@@ -387,8 +380,7 @@ private:
 	void ensure_not_end_(std::string funcname) const
 	{
 		if (m_curpos == m_end)
-			throw FatalError("Region::"+
-					 std::move(funcname)+
+			throw FatalError("Region::"+funcname+
 					 ": internal error.");
 	}
 private:
@@ -452,7 +444,7 @@ public:
 	}
 	void set_scope(std::string s) noexcept
 	{
-		m_current_scope = std::move(s);
+		m_current_scope = s;
 	}
 	void set_scope(char ch)
 	{
@@ -460,15 +452,13 @@ public:
 	}
 	void undef(std::string name)
 	{
-		m_storage.undef(make_scoped_(std::move(name)));
+		m_storage.undef(make_scoped_(name));
 	}
 	bool define(std::string name, std::string file, int line,
 		    std::string contents)
 	{
-		return m_storage.define(make_scoped_(std::move(name)),
-					std::move(file),
-					line,
-					std::move(contents));
+		return m_storage.define(make_scoped_(name), file, line,
+					contents);
 	}
 	void clear() noexcept
 	{
@@ -481,7 +471,7 @@ public:
 	}
 	const Record &query(std::string name) const
 	{
-		return m_storage.query(make_scoped_(std::move(name)));
+		return m_storage.query(make_scoped_(name));
 	}
 private:
 	std::string make_scoped_(const std::string &name) const
@@ -609,8 +599,8 @@ public:
 		Record(std::string file,
 		       std::string base_file,
 		       int base_line) noexcept
-			: m_file(std::move(file)),
-			  m_base_file(std::move(base_file)),
+			: m_file(file),
+			  m_base_file(base_file),
 			  m_base_line(base_line)
 		{
 		}
@@ -664,7 +654,7 @@ private:
 				m_ip->m_loop_detector.push(
 					name,
 					name,
-					std::move(base_file),
+					base_file,
 					base_line);
 			}
 			catch (Looped &ex) {
@@ -678,18 +668,15 @@ public:
 	IncludeProcessor() = default;
 	Locker lock(std::string name, std::string base_file="", int base_line=0)
 	{
-		return Locker(*this,
-			      std::move(name),
-			      std::move(base_file),
-			      base_line);
+		return Locker(*this, name, base_file, base_line);
 	}
 	void push(std::string path)
 	{
-		m_path_list.push(std::move(path));
+		m_path_list.push(path);
 	}
 	void open(std::ifstream &ifs, std::string name)
 	{
-		m_path_list.open(ifs, std::move(name));
+		m_path_list.open(ifs, name);
 	}
 	const Stack &get_stack() const noexcept
 	{
@@ -797,8 +784,8 @@ public:
 			   std::string ofname,
 			   std::ostream &ofs,
 			   std::ostream &lgr) noexcept
-		: CompileOptions(std::move(opts)),
-		  m_output_file_name(std::move(ofname)),
+		: CompileOptions(opts),
+		  m_output_file_name(ofname),
 		  m_output_stream(ofs),
 		  m_logger(lgr)
 	{
@@ -915,9 +902,7 @@ public:
 	{
 		auto locker = ctx.include_processor().lock(input_name);
 
-		FileContext(ctx,
-			    std::move(input_name),
-			    input_stream).process_();
+		FileContext(ctx, input_name, input_stream).process_();
 	}
 private:
 	using DirectiveHandler = bool (FileContext::*)(ConstStringRegion);
@@ -926,7 +911,7 @@ private:
 		    std::string input_file_name,
 		    std::istream &input_stream)
 		: m_compile_unit_context(cuctx),
-		  m_input_file_name(std::move(input_file_name)),
+		  m_input_file_name(input_file_name),
 		  m_input_stream(input_stream)
 	{
 	}
@@ -1528,7 +1513,7 @@ public:
 	void set_file_name(std::string fname) noexcept
 	{
 		m_is_file = true;
-		m_file_name = std::move(fname);
+		m_file_name = fname;
 	}
 	const std::string &get_file_name() const noexcept
 	{
