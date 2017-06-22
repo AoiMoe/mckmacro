@@ -149,26 +149,26 @@ constexpr auto OPT_ON_CHAR = '+';
 constexpr auto OPT_OFF_CHAR = '-';
 
 //
-// LoopDetector : generic loop detector.
+// RecurseTracer : recurse recorder with loop detection.
 //
 // elements:
-//   Set   : set of record names to check duplication.
+//   Set   : set of record names to check loop.
 //   Stack : record stack to be traced back.
 //
 template <typename Record_>
-class LoopDetector
+class RecurseTracer
 {
 public:
-	NONCOPYABLE(LoopDetector);
-	DEFAULT_MOVABLE(LoopDetector);
+	NONCOPYABLE(RecurseTracer);
+	DEFAULT_MOVABLE(RecurseTracer);
 private:
 	struct LoopedTag { };
 public:
 	using Looped = NameError<LoopedTag>;
 	using Stack = std::list<Record_>;
 public:
-	~LoopDetector() = default;
-	LoopDetector() = default;
+	~RecurseTracer() = default;
+	RecurseTracer() = default;
 	bool is_loop(const std::string &name) const noexcept
 	{
 		return m_set.find(name) != m_set.end();
@@ -399,10 +399,10 @@ public:
 	DEFAULT_MOVABLE(MacroProcessor);
 private:
 	using Record = MacroStorage::Record;
-	using LoopDet = LoopDetector<std::string>;
+	using RecurseTr = RecurseTracer<std::string>;
 public:
-	using Stack = LoopDet::Stack;
-	using Looped = LoopDet::Looped;
+	using Stack = RecurseTr::Stack;
+	using Looped = RecurseTr::Looped;
 	using Undefined = MacroStorage::Undefined;
 private:
 	class Locker
@@ -414,10 +414,10 @@ private:
 		~Locker() noexcept
 		{
 			if (m_result)
-				m_loop_detector.pop();
+				m_recurse_tracer.pop();
 		}
 		Locker(Locker &&rh) noexcept
-			: m_loop_detector(rh.m_loop_detector),
+			: m_recurse_tracer(rh.m_recurse_tracer),
 			  m_result(reset_pointer(&rh.m_result))
 		{
 		}
@@ -428,11 +428,11 @@ private:
 			return m_result->get_contents();
 		}
 	private:
-		Locker(LoopDet &l, const Record &r) noexcept
-			: m_loop_detector(l), m_result(&r)
+		Locker(RecurseTr &l, const Record &r) noexcept
+			: m_recurse_tracer(l), m_result(&r)
 		{
 		}
-		LoopDet &m_loop_detector;
+		RecurseTr &m_recurse_tracer;
 		const Record *m_result;
 	};
 public:
@@ -440,7 +440,7 @@ public:
 	MacroProcessor() = default;
 	Locker lock(const std::string &name)
 	{
-		return Locker(m_loop_detector, query_and_lock_(name));
+		return Locker(m_recurse_tracer, query_and_lock_(name));
 	}
 	void set_scope(std::string s) noexcept
 	{
@@ -463,11 +463,11 @@ public:
 	void clear() noexcept
 	{
 		m_storage.clear();
-		m_loop_detector.clear();
+		m_recurse_tracer.clear();
 	}
 	const Stack &get_stack() const noexcept
 	{
-		return m_loop_detector.get_stack();
+		return m_recurse_tracer.get_stack();
 	}
 	const Record &query(std::string name) const
 	{
@@ -496,7 +496,7 @@ private:
 	const Record &query_and_lock_1_(const std::string &name)
 	{
 		const auto &r = m_storage.query(name);
-		m_loop_detector.push(name, name);
+		m_recurse_tracer.push(name, name);
 		return r;
 	}
 	const Record &query_and_lock_(const std::string &name)
@@ -518,7 +518,7 @@ private:
 	}
 private:
 	MacroStorage m_storage;
-	LoopDet m_loop_detector;
+	RecurseTr m_recurse_tracer;
 	std::string m_current_scope;
 };
 
@@ -630,8 +630,8 @@ public:
 		int m_base_line = 0;
 	};
 public:
-	using Stack = LoopDetector<Record>::Stack;
-	using Looped = LoopDetector<Record>::Looped;
+	using Stack = RecurseTracer<Record>::Stack;
+	using Looped = RecurseTracer<Record>::Looped;
 	using CannotOpen = PathList::CannotOpen;
 private:
 	class Locker
@@ -643,7 +643,7 @@ private:
 		~Locker() noexcept
 		{
 			if (m_ip)
-				m_ip->m_loop_detector.pop();
+				m_ip->m_recurse_tracer.pop();
 		}
 		Locker(Locker &&rh) noexcept : m_ip(reset_pointer(&rh.m_ip)) { }
 	private:
@@ -651,7 +651,7 @@ private:
 		       std::string base_file, int base_line) : m_ip(&ip)
 		{
 			try {
-				m_ip->m_loop_detector.push(
+				m_ip->m_recurse_tracer.push(
 					name,
 					name,
 					base_file,
@@ -680,10 +680,10 @@ public:
 	}
 	const Stack &get_stack() const noexcept
 	{
-		return m_loop_detector.get_stack();
+		return m_recurse_tracer.get_stack();
 	}
 private:
-	LoopDetector<Record> m_loop_detector;
+	RecurseTracer<Record> m_recurse_tracer;
 	PathList m_path_list;
 };
 
