@@ -197,9 +197,12 @@ public:
 	{
 		return *m_stack.begin();
 	}
-	const Stack &get_stack() const noexcept
+	template <typename F_>
+	void trace_back(const F_ &f) const
+		noexcept(noexcept(f(*static_cast<const Record_ *>(nullptr))))
 	{
-		return m_stack;
+		for (auto &rec : m_stack)
+			f(rec);
 	}
 	void clear() noexcept
 	{
@@ -465,9 +468,11 @@ public:
 		m_storage.clear();
 		m_recurse_tracer.clear();
 	}
-	const Stack &get_stack() const noexcept
+	template <typename F_>
+	void trace_back(const F_ &f) const
+		noexcept(noexcept(f(std::string{})))
 	{
-		return m_recurse_tracer.get_stack();
+		m_recurse_tracer.trace_back(f);
 	}
 	const Record &query(std::string name) const
 	{
@@ -678,9 +683,11 @@ public:
 	{
 		m_path_list.open(ifs, name);
 	}
-	const Stack &get_stack() const noexcept
+	template <typename F_>
+	void trace_back(const F_ &f) const
+		noexcept(noexcept(f(Record{})))
 	{
-		return m_recurse_tracer.get_stack();
+		m_recurse_tracer.trace_back(f);
 	}
 private:
 	RecurseTracer<Record> m_recurse_tracer;
@@ -936,13 +943,16 @@ private:
 		try {
 			MacroProcessor &m = macro_processor();
 
-			for (auto &mname : m.get_stack()) {
-				auto &rec = m.query(mname);
-				os << "\t" << MACRO_CHAR << mname
-				   << " defined at line " << rec.get_line()
-				   << " in \"" << rec.get_file() << '\"'
-				   << std::endl;
-			}
+			m.trace_back(
+				[&](const std::string &mname) {
+					auto &rec = m.query(mname);
+					os << "\t" << MACRO_CHAR << mname
+					   << " defined at line "
+					   << rec.get_line()
+					   << " in \"" << rec.get_file() << '\"'
+					   << std::endl;
+				}
+			);
 		}
 		catch (...) {
 		}
@@ -958,19 +968,19 @@ private:
 	void dump_include_stack(std::ostream &os) const noexcept
 	{
 		try {
-			IncludeProcessor &i = include_processor();
-
-			for (auto &rec : i.get_stack()) {
-				if (rec.get_base_line()) {
-					os << '\t';
-					show_include_record_(
-						os,
-						rec.get_file(),
-						rec.get_base_file(),
-						rec.get_base_line());
-					os << std::endl;
-				}
-			}
+			include_processor().trace_back(
+				[&](const IncludeProcessor::Record &rec) {
+					if (rec.get_base_line()) {
+						os << '\t';
+						show_include_record_(
+							os,
+							rec.get_file(),
+							rec.get_base_file(),
+							rec.get_base_line());
+						os << std::endl;
+						}
+					}
+				);
 		}
 		catch (...) {
 		}
