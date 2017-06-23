@@ -199,7 +199,7 @@ public:
 	}
 	template <typename F_>
 	void trace_back(const F_ &f) const
-		noexcept(noexcept(f(*static_cast<const Record_ *>(nullptr))))
+		noexcept(noexcept(f(std::declval<const Record_ &>())))
 	{
 		for (auto &rec : m_stack)
 			f(rec);
